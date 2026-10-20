@@ -1,0 +1,437 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// ENUM
+// ─────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum CourseState {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AccessState {
+  OPEN
+  NEW_ENROLLMENT_CLOSED
+  LOCKED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  HIDDEN
+  LEFT
+}
+
+enum BlockType {
+  TEXT
+  VIDEO
+  ACTIVITY
+  QUIZ
+  ASSIGNMENT
+  GAME
+  REFLECTION
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  GRADED
+  NEEDS_REVISION
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+  NUMBER
+  ESSAY
+  MATCHING
+  ORDERING
+  FILL_BLANK
+  DRAG_DROP
+}
+
+// ─────────────────────────────────────────────────────────────
+// IDENTITAS & ROLE
+// ─────────────────────────────────────────────────────────────
+
+/// Profil aplikasi yang berelasi 1:1 dengan auth.users Supabase.
+/// Role ditetapkan lewat backend tepercaya, tidak pernah dari body request client.
+model Profile {
+  id         String   @id // = auth.users.id (UUID)
+  fullName   String
+  role       Role     @default(STUDENT)
+  className  String? // kelas siswa (mis. "VII-B")
+  avatarUrl  String?
+  isActive   Boolean  @default(true) // dinonaktifkan Admin memblokir akses
+  isLocked   Boolean  @default(false) // dikunci Admin: akun bisa dilihat tapi tidak bisa diedit
+  lastActive DateTime @default(now())
+
+  coursesOwned     Course[]           @relation("CourseOwner")
+  enrollments      Enrollment[]
+  progress         Progress[]
+  quizAttempts     QuizAttempt[]
+  submissions      Submission[]
+  gameAttempts     GameAttempt[]
+  gameVersionsCreated GameVersion[]
+  auditLog         AuditLog[]
+  notifications    Notification[]
+  avatarAssignments StudentAvatar[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+  @@index([className])
+}
+
+/// Riwayat avatar siswa (mendukung ubah avatar + pilihan koleksi).
+model StudentAvatar {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Profile  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  url       String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([studentId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// KONTEN PEMBELAJARAN
+// ─────────────────────────────────────────────────────────────
+
+model Course {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  /// Token unik untuk link join; divalidasi di server, bukan cuma judul.
+  joinToken   String      @unique @default(cuid())
+  title       String
+  shortTitle  String
+  description String
+  subject     String
+  grade       String
+  duration    String      @default("1 JP")
+
+  state   CourseState  @default(DRAFT)
+  access  AccessState  @default(OPEN)
+
+  /// Guru pemilik. Otorisasi selalu merujuk relasi ini.
+  ownerId String
+  owner   Profile @relation("CourseOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  modules     Module[]
+  enrollments Enrollment[]
+  progress    Progress[]
+  quizAttempts QuizAttempt[]
+  submissions  Submission[]
+  gameAttempts GameAttempt[]
+  gameVersions GameVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([state])
+}
+
+model Module {
+  id       String  @id @default(cuid())
+  courseId String
+  course   Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title    String
+  eyebrow  String  @default("")
+  accent   String  @default("violet")
+  order    Int     @default(0)
+
+  blocks LessonBlock[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+}
+
+model LessonBlock {
+  id          String    @id @default(cuid())
+  moduleId    String
+  module      Module    @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  type        BlockType
+  title       String
+  description String    @default("")
+  duration    String    @default("5 menit")
+  order       Int       @default(0)
+  /// Materi fleksibel: text, videoUrl, pdfUrl, config game/kuis/aktivitas.
+  material    Json?
+
+  progress    Progress[]
+  quizAttempts QuizAttempt[]
+  submissions  Submission[]
+  gameAttempts GameAttempt[]
+  quiz         Quiz?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([moduleId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// ENROLLMENT & PROGRES
+// ─────────────────────────────────────────────────────────────
+
+/// Hubungan siswa↔pembelajaran. Unique constraint mencegah enrollment ganda.
+model Enrollment {
+  id        String           @id @default(cuid())
+  studentId String
+  student   Profile          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  status    EnrollmentStatus @default(ACTIVE)
+  joinedAt  DateTime         @default(now())
+
+  @@unique([studentId, courseId])
+  @@index([courseId])
+  @@index([studentId])
+}
+
+/// Progres satu blok oleh satu siswa. Idempoten lewat unique(studentId, blockId).
+model Progress {
+  id          String      @id @default(cuid())
+  studentId   String
+  student     Profile     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId    String
+  course      Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  blockId     String
+  block       LessonBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  completed   Boolean     @default(false)
+  completedAt DateTime?
+  /// Idempotency key dari client untuk mencegah duplikasi saat retry.
+  eventId     String?     @unique
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([studentId, blockId])
+  @@index([courseId])
+  @@index([studentId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// KUIS & PENILAIAN
+// ─────────────────────────────────────────────────────────────
+
+model Quiz {
+  id             String  @id @default(cuid())
+  blockId        String  @unique
+  block          LessonBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  title          String
+  instructions   String  @default("")
+  totalPoints    Int     @default(100)
+  maxAttempts    Int     @default(2)
+  shuffle        Boolean @default(false)
+  passThreshold  Int     @default(70)
+  showScore      Boolean @default(true)
+  /// Kunci jawaban disimpan server; tidak dikirim ke client sebelum submit.
+  questions      Question[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Question {
+  id           String        @id @default(cuid())
+  quizId       String
+  quiz         Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  type         QuestionType  @default(MULTIPLE_CHOICE)
+  prompt       String
+  options      Json?
+  answer       String
+  explanation  String        @default("")
+  points       Int           @default(10)
+  order        Int           @default(0)
+
+  @@index([quizId])
+}
+
+model QuizAttempt {
+  id            String   @id @default(cuid())
+  studentId     String
+  student       Profile  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId      String
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  blockId       String
+  block         LessonBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  attemptNumber Int
+  score         Int
+  totalPoints   Int
+  passed        Boolean  @default(false)
+  /// Jawaban per soal (JSON) untuk analitik salah/jawaban.
+  answers       Json?
+  /// Idempotency key mencegah attempt ganda saat retry.
+  eventId       String?  @unique
+  submittedAt   DateTime @default(now())
+
+  @@unique([studentId, blockId, attemptNumber])
+  @@index([courseId])
+  @@index([studentId])
+}
+
+/// Tugas/aktivitas uraian yang dinilai manual guru.
+model Submission {
+  id         String           @id @default(cuid())
+  studentId  String
+  student    Profile          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId   String
+  course     Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  blockId    String
+  block      LessonBlock      @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  response   String           @default("")
+  fileUrl    String?
+  score      Int?
+  maxScore   Int              @default(100)
+  feedback   String?
+  status     SubmissionStatus @default(SUBMITTED)
+  eventId    String?          @unique
+  submittedAt DateTime        @default(now())
+  reviewedAt DateTime?
+
+  @@index([courseId])
+  @@index([studentId])
+  @@index([blockId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// MINI-GAME STUDIO (versioned)
+// ─────────────────────────────────────────────────────────────
+
+model GameVersion {
+  id          String  @id @default(cuid())
+  courseId    String?
+  course      Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  templateId  String // number-line | charge-cards | number-line-challenge
+  name        String
+  instructions String @default("")
+  /// Konfigurasi perilaku game; benar-benar mengubah mekanika.
+  config      Json
+  version     Int     @default(1)
+  published   Boolean @default(false)
+  /// Draft disimpan terpisah dari versi terbit agar tidak merusak hasil peserta.
+  isDraft     Boolean @default(true)
+  createdBy   String
+  creator     Profile @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  attempts    GameAttempt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+  @@index([templateId])
+}
+
+model GameAttempt {
+  id            String      @id @default(cuid())
+  studentId     String
+  student       Profile     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId      String?
+  course        Course?     @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  blockId       String?
+  block         LessonBlock? @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  gameVersionId String
+  gameVersion   GameVersion @relation(fields: [gameVersionId], references: [id], onDelete: Cascade)
+  score         Int         @default(0)
+  passed        Boolean     @default(false)
+  /// Playtest guru TIDAK boleh mempengaruhi nilai/enrollment siswa.
+  isPlaytest    Boolean     @default(false)
+  details       Json?
+  playedAt      DateTime    @default(now())
+
+  @@index([studentId])
+  @@index([courseId])
+  @@index([gameVersionId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// NOTIFIKASI, AUDIT, PENGATURAN PLATFORM
+// ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String   @default("")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Log tindakan administratif penting untuk ditinjau Admin.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     Profile? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  target    String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+}
+
+/// Pengaturan platform (branding global) — satu baris singleton.
+model PlatformSetting {
+  id        String   @id @default("singleton")
+  appName   String   @default("EduVerse")
+  accent    String   @default("#7C5CFC")
+  updatedAt DateTime @updatedAt
+}
+
+model ForumPost {
+  id         String       @id @default(cuid())
+  moduleId   String
+  courseSlug String
+  authorId   String
+  authorName String
+  role       String
+  className  String?
+  title      String
+  content    String
+  likes      Int          @default(0)
+  createdAt  DateTime     @default(now())
+
+  replies    ForumReply[]
+
+  @@index([moduleId])
+  @@index([courseSlug])
+}
+
+model ForumReply {
+  id         String    @id @default(cuid())
+  postId     String
+  post       ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId   String
+  authorName String
+  role       String
+  content    String
+  likes      Int       @default(0)
+  isVerified Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@index([postId])
+}
+
