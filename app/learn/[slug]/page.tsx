@@ -9,7 +9,7 @@ import { ProgressRing, StatusPill } from "@/components/DashboardBits";
 import { Toast } from "@/components/Toast";
 import { demoCourse, quizQuestions, type LessonBlock, type Module } from "@/lib/demo-data";
 import { getCourseModules, getCourseState, getIdentity, getProgress, getCompleted, registerParticipant, saveIdentity, saveProgress, saveCompleted, type ParticipantIdentity } from "@/lib/storage";
-import { getCourseStructure, getMyCourseProgress, getSessionProfile, type DbCourse } from "@/lib/actions/dashboards";
+import { getCourseStructure, getMyCourseProgress, getSessionProfile, type DbCourse, type DbModule } from "@/lib/actions/dashboards";
 import { joinCourseByToken, validateJoinToken } from "@/lib/actions/enrollment";
 import { markBlockComplete } from "@/lib/actions/progress";
 import { toModule } from "@/lib/course";
@@ -91,7 +91,7 @@ export default function StudentLearningPage() {
           setEnrolled(mine.enrolled);
           setCompleted(mine.completedBlockIds);
           const total = structure
-            ? structure.modules.reduce((sum, m) => sum + m.blocks.length, 0)
+            ? structure.modules.reduce((sum: number, m: DbModule) => sum + m.blocks.length, 0)
             : 0;
           if (total > 0) setProgress(Math.round((mine.completedBlockIds.length / total) * 100));
         }
@@ -104,7 +104,7 @@ export default function StudentLearningPage() {
         }
 
         const dbModules = structure ? structure.modules.map(toModule) : [];
-        const total = structure ? structure.modules.reduce((sum, m) => sum + m.blocks.length, 0) : 0;
+        const total = structure ? structure.modules.reduce((sum: number, m: DbModule) => sum + m.blocks.length, 0) : 0;
         dbRef.current = {
           modules: dbModules,
           completed: mine?.completedBlockIds ?? [],
@@ -165,7 +165,7 @@ export default function StudentLearningPage() {
     const key = learningLink.trim() || courseSlug;
     const resolved = await resolveLearningLink(key);
     if ("error" in resolved) {
-      setToast(resolved.error);
+      setToast(resolved.error ?? "Link pembelajaran tidak valid.");
       return;
     }
 
