@@ -1,0 +1,14 @@
+{
+  "routes": [
+    { "path": "/", "title": "EduVerse LMS" },
+    { "path": "/teacher", "title": "Teacher Dashboard" },
+    { "path": "/teacher/course/operasi-bilangan-bulat", "title": "Course Builder" },
+    { "path": "/teacher/course/operasi-bilangan-bulat/quiz/:blockId", "title": "Quiz Builder" },
+    { "path": "/teacher/game-studio", "title": "Mini-Game Studio" },
+    { "path": "/learn/operasi-bilangan-bulat", "title": "Student Learning" },
+    { "path": "/learn/operasi-bilangan-bulat/modul/:moduleId", "title": "Halaman Modul" },
+    { "path": "/learn/operasi-bilangan-bulat/games", "title": "Game Library" },
+    { "path": "/admin", "title": "Admin Console" },
+    { "path": "/about", "title": "Tentang EduVerse" }
+  ]
+}
