@@ -3,12 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, BookOpen, GraduationCap, Loader2, ShieldCheck, UsersRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, GraduationCap, Link2, Loader2, UsersRound } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
 import { Toast } from "@/components/Toast";
 import { loginUser, registerUser } from "@/lib/actions/auth";
 
-type Role = "TEACHER" | "STUDENT" | "ADMIN";
 type Mode = "login" | "register";
 
 /**
@@ -43,7 +42,7 @@ function checkCompletedProfile(role?: string): string | null {
 
 export default function AuthPage() {
   const router = useRouter();
-  const [role, setRole] = useState<Role>("STUDENT");
+  const [role, setRole] = useState<"STUDENT" | "TEACHER">("STUDENT");
   const [mode, setMode] = useState<Mode>("login");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -69,14 +68,12 @@ export default function AuthPage() {
       const result =
         mode === "login"
           ? await loginUser({ email, password })
-          : role === "ADMIN"
-          ? { ok: false, error: "Admin daftar melalui bootstrap, bukan form publik." }
           : await registerUser({
               fullName,
               email,
               password,
               className: role === "STUDENT" ? className : undefined,
-              role: role === "TEACHER" || role === "STUDENT" ? role : "TEACHER",
+              role,
             });
 
       if (!result.ok) {
@@ -105,14 +102,11 @@ export default function AuthPage() {
         </Link>
         <div className="eyebrow eyebrow--light">MASUK KE EDUVERSE</div>
         <h1>Satu akun, satu peran, pengalaman yang berbeda.</h1>
-        <p>Guru merancang kelas. Siswa belajar lewat link. Admin menjaga semuanya tetap sehat.</p>
+        <p>Guru merancang kelas. Siswa belajar lewat link.</p>
         <div className="auth-visual__art">
           <span className="join-orbit__number">−2</span>
           <span className="join-orbit__plus">+5</span>
           <span className="join-orbit__zero">0</span>
-        </div>
-        <div className="auth-admin-note">
-          <ShieldCheck size={14} /> Pendaftaran Admin hanya lewat proses bootstrap admin, tidak lewat formulir publik.
         </div>
       </div>
 
@@ -143,7 +137,15 @@ export default function AuthPage() {
             onClick={() => setRole("TEACHER")}
             type="button"
           >
-            <GraduationCap size={18} /> Guru
+            <BookOpen size={18} /> Guru
+          </button>
+          <button
+            className="auth-role"
+            onClick={() => setRole(role === "TEACHER" ? "STUDENT" : "TEACHER")}
+            type="button"
+            title="Beralih peran"
+          >
+            <Link2 size={14} />
           </button>
         </div>
 
@@ -154,10 +156,10 @@ export default function AuthPage() {
               <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Contoh: Alya Pramesti" />
             </div>
           )}
-          {mode === "register" && role === "TEACHER" && (
+          {mode === "register" && (
             <div className="field">
               <label>Nama lengkap</label>
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Contoh: Atika Pratiwi" />
+              <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Contoh: Alya Pramesti" />
             </div>
           )}
           <div className="field">
@@ -198,13 +200,9 @@ export default function AuthPage() {
           </button>
         </form>
 
-        {mode === "login" && role === "STUDENT" && (
-          <p className="auth-alt">Belum punya akun? <button className="linklike" onClick={() => setMode("register")}>Daftar sebagai Siswa</button></p>
+        {mode === "login" && (
+          <p className="auth-alt">Belum punya akun? <button className="linklike" onClick={() => setMode("register")}>Daftar</button></p>
         )}
-        {mode === "login" && role === "TEACHER" && (
-          <p className="auth-alt">Belum punya akun guru? <button className="linklike" onClick={() => setMode("register")}>Daftar sebagai Guru</button></p>
-        )}
-        <p className="auth-alt">Masuk sebagai Admin? <Link href="/auth/admin">Halaman login Admin</Link></p>
 
         {/* Shortcut Akun Demo Siap Pakai (1-Klik Masuk) */}
         <div className="demo-shortcuts" style={{ marginTop: 20, paddingTop: 16, borderTop: "1px dashed var(--line)" }}>
@@ -276,36 +274,6 @@ export default function AuthPage() {
               </div>
             </button>
 
-            <button
-              type="button"
-              className="button button--ghost button--small"
-              style={{ justifyContent: "flex-start", width: "100%", padding: "10px 14px", border: "1px solid var(--line)", background: "var(--bg)" }}
-              onClick={async () => {
-                setEmail("admin@eduverse.id");
-                setPassword("AdminEduVerse123!");
-                setMode("login");
-                setLoading(true);
-                try {
-                  const res = await loginUser({ email: "admin@eduverse.id", password: "AdminEduVerse123!" });
-                  if (res.ok) {
-                    router.replace(resolveDestination(res.role));
-                    router.refresh();
-                  } else {
-                    setToast(res.error || "Gagal masuk.");
-                  }
-                } catch {
-                  setToast("Koneksi bermasalah.");
-                } finally {
-                  setLoading(false);
-                }
-              }}
-            >
-              <ShieldCheck size={16} color="var(--red)" />
-              <div style={{ textAlign: "left", lineHeight: 1.2 }}>
-                <strong style={{ display: "block", fontSize: "0.8rem" }}>Admin: Sistem</strong>
-                <small style={{ color: "var(--muted)", fontSize: "0.68rem" }}>admin@eduverse.id · Pengelola Sistem</small>
-              </div>
-            </button>
           </div>
         </div>
       </div>

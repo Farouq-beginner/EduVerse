@@ -38,7 +38,7 @@ export async function updateSession(request: NextRequest) {
   // Tanpa ini, tombol "kembali" browser memunculkan form login lagi.
   // Hanya redirect jika profile sudah memiliki role yang valid.
   // Jika role belum terdefinisi, biarkan halaman auth tampil untuk penyelesaian.
-  const isAuthPage = path === "/auth" || path === "/auth/admin";
+  const isAuthPage = path === "/auth";
   if (user && isAuthPage) {
     const { data: profile } = await supabase
       .from("Profile")

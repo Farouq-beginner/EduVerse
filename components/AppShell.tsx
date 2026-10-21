@@ -12,7 +12,6 @@ import { logoutUser } from "@/lib/actions/auth";
 
 const teacherLinks = [
   { href: "/teacher", label: "Ringkasan", icon: LayoutDashboard },
-  { href: "/teacher/course/operasi-bilangan-bulat", label: "Pembelajaran", icon: BookOpen },
   { href: "/teacher/game-studio", label: "Mini-Game Studio", icon: Gamepad2, accent: true },
   { href: "/teacher?tab=participants", label: "Peserta", icon: Users },
   { href: "/teacher?tab=analytics", label: "Analitik", icon: BarChart3 },
@@ -25,6 +24,7 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
   const [appName, setAppName] = useState("EduVerse");
   const [hash, setHash] = useState("");
   const [account, setAccount] = useState<{ fullName: string; role: string } | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -41,7 +41,10 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
       .then((profile) => {
         if (active && profile) setAccount({ fullName: profile.fullName, role: profile.role });
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setProfileLoaded(true);
+      });
     return () => {
       active = false;
     };
@@ -95,29 +98,24 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
     );
   }
 
-  const links = role === "admin" ? [
-    { href: "/admin", label: "Overview", icon: LayoutDashboard },
-    { href: "/admin#teachers", label: "Teacher & Admin", icon: Users },
-    { href: "/admin#courses", label: "Pembelajaran", icon: BookOpen },
-    { href: "/admin#activity", label: "Audit log", icon: ShieldCheck },
-    { href: "/admin#settings", label: "Branding", icon: Settings2 },
-  ] : teacherLinks;
+  const links = teacherLinks;
 
-  const initials =
-    account?.fullName
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "GU";
+  const initials = account?.fullName
+    ? account.fullName
+        .split(" ")
+        .map((part) => part[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "·";
   const roleLabel =
-    account?.role === "ADMIN" ? "Platform Admin" : account?.role === "STUDENT" ? "Siswa" : "Guru Matematika";
+    account?.role === "ADMIN" ? "Platform Admin" : account?.role === "STUDENT" ? "Siswa" : "Guru";
 
   return (
     <div className="app-frame">
       <aside className="sidebar">
         <div className="sidebar__brand"><BrandMark /><span className="demo-badge">DEMO</span></div>
-        <div className="workspace-switcher"><div className="workspace-avatar">{initials}</div><div><strong>{account?.fullName ?? "Guru"}</strong><small>{roleLabel}</small></div><ChevronDown size={15} /></div>
+        <div className="workspace-switcher"><div className="workspace-avatar">{initials}</div><div><strong>{account ? account.fullName : profileLoaded ? "Akun guru" : "Memuat profil..."}</strong><small>{account ? roleLabel : "Sinkron akun"}</small></div><ChevronDown size={15} /></div>
         <div className="sidebar__label">WORKSPACE</div>
         <nav className="sidebar__nav" aria-label="Navigasi utama">
           {links.map(({ href, label, icon: Icon, accent }) => {
