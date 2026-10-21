@@ -237,7 +237,7 @@ export default function AuthPage() {
             >
               <GraduationCap size={16} color="var(--violet)" />
               <div style={{ textAlign: "left", lineHeight: 1.2 }}>
-                <strong style={{ display: "block", fontSize: "0.8rem" }}>Guru: Farouq Sensei</strong>
+                <strong style={{ display: "block", fontSize: "0.8rem" }}>Guru: Salma Sensei</strong>
                 <small style={{ color: "var(--muted)", fontSize: "0.68rem" }}>guru@eduverse.id · Pengelola Pembelajaran</small>
               </div>
             </button>
