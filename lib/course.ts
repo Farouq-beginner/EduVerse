@@ -24,6 +24,7 @@ export function toModule(module: DbModule): Module {
     id: module.id,
     title: module.title,
     eyebrow: module.eyebrow,
+    duration: module.duration || "10 menit",
     accent: (module.accent || "violet") as Module["accent"],
     lessons: module.blocks.map(toLessonBlock),
   };
@@ -55,6 +56,7 @@ export function toSavePayload(modules: Module[]) {
       id: module.id,
       title: module.title,
       eyebrow: module.eyebrow,
+      duration: module.duration,
       accent: module.accent,
       order: moduleIndex,
       blocks: module.lessons.map((block, blockIndex) => ({

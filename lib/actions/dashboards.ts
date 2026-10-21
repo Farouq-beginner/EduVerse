@@ -35,13 +35,18 @@ export type ParticipantRow = {
  * Bergantung pada enrollment di database — siswa yang join lewat link langsung muncul,
  * tanpa impor manual. Hanya mengembalikan course yang dimiliki guru tsb.
  */
-export async function getCourseParticipants(courseId: string): Promise<{
+type ViewerProfile = Awaited<ReturnType<typeof getSessionProfile>>;
+
+export async function getCourseParticipants(
+  courseId: string,
+  viewer?: ViewerProfile
+): Promise<{
   ok: boolean;
   rows?: ParticipantRow[];
   error?: string;
 }> {
   try {
-    const me = await getSessionProfile();
+    const me = viewer ?? (await getSessionProfile());
     if (!me || me.role !== "TEACHER" || !me.isActive)
       return { ok: false, error: "Hanya guru yang boleh melihat peserta." };
 
@@ -319,6 +324,235 @@ export async function getTeacherStats() {
   }
 }
 
+export type TeacherCourseCard = {
+  id: string;
+  slug: string;
+  joinToken: string;
+  title: string;
+  shortTitle: string;
+  description: string;
+  subject: string;
+  grade: string;
+  state: string;
+  access: string;
+  accent: string;
+  moduleCount: number;
+  blockCount: number;
+  studentCount: number;
+  averageProgress: number;
+  updatedAt: string;
+};
+
+/**
+ * Semua pembelajaran milik guru yang login — tidak ada data demo dan tidak ada
+ * course milik guru lain. Guru baru menerima array kosong sehingga halamannya
+ * benar-benar kosong sampai ia membuat pembelajaran sendiri.
+ */
+export async function getMyCourses(): Promise<TeacherCourseCard[]> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER" || !me.isActive) return [];
+
+    const courses = await prisma.course.findMany({
+      where: { ownerId: me.id },
+      include: {
+        modules: {
+          orderBy: { order: "asc" },
+          select: { accent: true, _count: { select: { blocks: true } } },
+        },
+        _count: { select: { enrollments: { where: { status: "ACTIVE" } } } },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (courses.length === 0) return [];
+
+    const done = await prisma.progress.groupBy({
+      by: ["courseId"],
+      where: { courseId: { in: courses.map((c) => c.id) }, completed: true },
+      _count: { _all: true },
+    });
+    const doneByCourse = new Map(done.map((row) => [row.courseId, row._count._all]));
+
+    return courses.map((course) => {
+      const blockCount = course.modules.reduce((sum, m) => sum + m._count.blocks, 0);
+      const studentCount = course._count.enrollments;
+      const completed = doneByCourse.get(course.id) ?? 0;
+      return {
+        id: course.id,
+        slug: course.slug,
+        joinToken: course.joinToken,
+        title: course.title,
+        shortTitle: course.shortTitle,
+        description: course.description,
+        subject: course.subject,
+        grade: course.grade,
+        state: course.state,
+        access: course.access,
+        accent: course.modules[0]?.accent || "violet",
+        moduleCount: course.modules.length,
+        blockCount,
+        studentCount,
+        averageProgress:
+          studentCount > 0 && blockCount > 0
+            ? Math.round((completed / (studentCount * blockCount)) * 100)
+            : 0,
+        updatedAt: course.updatedAt.toISOString(),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+/** Guru membuat pembelajaran baru; hanya course miliknya yang dibuat di database. */
+export async function createTeacherCourse(input: {
+  title: string;
+  subject?: string;
+  grade?: string;
+  description?: string;
+}): Promise<{ ok: boolean; error?: string; course?: TeacherCourseCard }> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER" || !me.isActive)
+      return { ok: false, error: "Hanya guru yang boleh membuat pembelajaran." };
+
+    const title = input.title.trim();
+    if (!title) return { ok: false, error: "Judul pembelajaran wajib diisi." };
+
+    const base = slugify(title) || "pembelajaran";
+    let slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+    while (await prisma.course.findUnique({ where: { slug }, select: { id: true } })) {
+      slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+    }
+
+    const created = await prisma.course.create({
+      data: {
+        slug,
+        title,
+        shortTitle: title.length > 34 ? `${title.slice(0, 32)}…` : title,
+        description: input.description?.trim() || "Pembelajaran baru — tambahkan modul dan materi.",
+        subject: input.subject?.trim() || "Matematika",
+        grade: input.grade?.trim() || "Kelas VII",
+        state: "DRAFT",
+        access: "OPEN",
+        ownerId: me.id,
+      },
+    });
+
+    return {
+      ok: true,
+      course: {
+        id: created.id,
+        slug: created.slug,
+        joinToken: created.joinToken,
+        title: created.title,
+        shortTitle: created.shortTitle,
+        description: created.description,
+        subject: created.subject,
+        grade: created.grade,
+        state: created.state,
+        access: created.access,
+        accent: "violet",
+        moduleCount: 0,
+        blockCount: 0,
+        studentCount: 0,
+        averageProgress: 0,
+        updatedAt: created.updatedAt.toISOString(),
+      },
+    };
+  } catch {
+    return { ok: false, error: "Gagal membuat pembelajaran baru." };
+  }
+}
+
+/** Simpan judul/deskripsi pembelajaran dari course builder. */
+export async function updateCourseMeta(
+  courseId: string,
+  input: { title?: string; description?: string; subject?: string; grade?: string }
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER") return { ok: false, error: "Hanya guru yang boleh mengubah pembelajaran." };
+    const course = await prisma.course.findFirst({
+      where: { id: courseId, ownerId: me.id },
+      select: { id: true },
+    });
+    if (!course) return { ok: false, error: "Pembelajaran bukan milikmu." };
+
+    const title = input.title?.trim();
+    await prisma.course.update({
+      where: { id: courseId },
+      data: {
+        ...(title ? { title, shortTitle: title.length > 34 ? `${title.slice(0, 32)}…` : title } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.subject ? { subject: input.subject } : {}),
+        ...(input.grade ? { grade: input.grade } : {}),
+      },
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Gagal menyimpan identitas pembelajaran." };
+  }
+}
+
+/**
+ * Satu pintu data workspace guru: profil dibaca sekali, lalu peserta, modul,
+ * analitik, jawaban, dan aktivitas diambil paralel untuk course miliknya.
+ * Mengurangi lonjakan koneksi database saat halaman dibuka.
+ */
+export async function getTeacherWorkspace(courseId: string, slug: string) {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER" || !me.isActive) return null;
+
+    const [participants, structure, analytics, submissions, activity] = await Promise.all([
+      getCourseParticipants(courseId, me),
+      getCourseStructure(slug, { teacherOnly: true, viewerId: me.id, viewerRole: me.role }),
+      getCourseAnalytics(courseId, me),
+      getCourseSubmissions(courseId, undefined, me),
+      getTeacherCourseActivity(courseId, me),
+    ]);
+
+    return {
+      participants: participants.ok && participants.rows ? participants.rows : [],
+      structure,
+      analytics,
+      submissions,
+      activity,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Data course builder + profil guru dalam satu request (milik guru yang login). */
+export async function getTeacherCourseBuilder(
+  slug: string
+): Promise<{ structure: DbCourse; teacherName: string } | null> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER" || !me.isActive) return null;
+    const structure = await getCourseStructure(slug, {
+      teacherOnly: true,
+      viewerId: me.id,
+      viewerRole: me.role,
+    });
+    if (!structure) return null;
+    return { structure, teacherName: me.fullName };
+  } catch {
+    return null;
+  }
+}
+
 export type TeacherAccountRow = {
   id: string;
   name: string;
@@ -410,14 +644,14 @@ export type DbLessonBlock = {
   description: string;
   duration: string;
   material: unknown;
-};
-
-export type DbModule = {
+};export type DbModule = {
   id: string;
   title: string;
   eyebrow: string;
+  duration: string;
   accent: string;
   order: number;
+
   blocks: DbLessonBlock[];
 };
 
@@ -449,7 +683,7 @@ export type DbCourse = {
  */
 export async function getCourseStructure(
   slug: string,
-  options?: { teacherOnly?: boolean }
+  options?: { teacherOnly?: boolean; viewerId?: string; viewerRole?: string }
 ): Promise<DbCourse | null> {
   try {
     const course = await prisma.course.findUnique({
@@ -465,8 +699,14 @@ export async function getCourseStructure(
     if (!course) return null;
 
     if (options?.teacherOnly) {
-      const me = await getSessionProfile();
-      if (!me || me.role !== "TEACHER" || course.ownerId !== me.id) return null;
+      let viewerId = options.viewerId;
+      let viewerRole = options.viewerRole;
+      if (!viewerId || !viewerRole) {
+        const me = await getSessionProfile();
+        viewerId = me?.id;
+        viewerRole = me?.role;
+      }
+      if (!viewerId || viewerRole !== "TEACHER" || course.ownerId !== viewerId) return null;
     } else if (course.state !== "PUBLISHED") {
       // Course draft/arsip tidak boleh dilihat siswa.
       return null;
@@ -489,6 +729,7 @@ export async function getCourseStructure(
         id: m.id,
         title: m.title,
         eyebrow: m.eyebrow,
+        duration: m.duration,
         accent: m.accent,
         order: m.order,
         blocks: m.blocks.map((b) => ({
@@ -551,9 +792,12 @@ export type TeacherActivityRow = {
 };
 
 /** Aktivitas terbaru di course milik guru yang login (progress, kuis, jawaban, bergabung). */
-export async function getTeacherCourseActivity(courseId: string): Promise<TeacherActivityRow[]> {
+export async function getTeacherCourseActivity(
+  courseId: string,
+  viewer?: ViewerProfile
+): Promise<TeacherActivityRow[]> {
   try {
-    const me = await getSessionProfile();
+    const me = viewer ?? (await getSessionProfile());
     if (!me || me.role !== "TEACHER") return [];
 
     const course = await prisma.course.findFirst({
@@ -647,13 +891,16 @@ export type ModuleAnalyticsRow = {
 };
 
 /** Analitik per modul dihitung dari data nyata: blok, progres siswa, dan nilai kuis. */
-export async function getCourseAnalytics(courseId: string): Promise<{
+export async function getCourseAnalytics(
+  courseId: string,
+  viewer?: ViewerProfile
+): Promise<{
   rows: ModuleAnalyticsRow[];
   needsReview: number;
   topQuiz: string | null;
 }> {
   try {
-    const me = await getSessionProfile();
+    const me = viewer ?? (await getSessionProfile());
     if (!me || me.role !== "TEACHER") return { rows: [], needsReview: 0, topQuiz: null };
 
     const course = await prisma.course.findFirst({
@@ -740,6 +987,9 @@ export type StudentSubmissionRow = {
   blockId: string;
   blockTitle: string;
   response: string;
+  fileUrl: string | null;
+  fileName: string | null;
+  fileType: string | null;
   score: number | null;
   maxScore: number;
   status: string;
@@ -749,10 +999,11 @@ export type StudentSubmissionRow = {
 /** Jawaban yang dikirim siswa pada satu course (untuk review guru). */
 export async function getCourseSubmissions(
   courseId: string,
-  studentId?: string
+  studentId?: string,
+  viewer?: ViewerProfile
 ): Promise<StudentSubmissionRow[]> {
   try {
-    const me = await getSessionProfile();
+    const me = viewer ?? (await getSessionProfile());
     if (!me || me.role !== "TEACHER") return [];
 
     const course = await prisma.course.findFirst({
@@ -777,6 +1028,9 @@ export async function getCourseSubmissions(
       blockId: s.blockId,
       blockTitle: s.block.title,
       response: s.response,
+      fileUrl: s.fileUrl ?? null,
+      fileName: s.fileName ?? null,
+      fileType: s.fileType ?? null,
       score: s.score,
       maxScore: s.maxScore,
       status: s.status,
@@ -792,6 +1046,7 @@ export type SaveCourseInput = {
     id: string;
     title: string;
     eyebrow: string;
+    duration?: string;
     accent: string;
     order: number;
     blocks: Array<{
@@ -843,10 +1098,24 @@ export async function saveCourseStructure(
               courseId,
               title: m.title,
               eyebrow: m.eyebrow,
+              duration: m.duration || "10 menit",
               accent: m.accent,
               order: m.order ?? mIndex,
             },
           })).id;
+      if (existingModuleIds.has(m.id)) {
+        // Judul, label, dan durasi modul ikut tersimpan saat guru mengeditnya.
+        await prisma.module.update({
+          where: { id: moduleId },
+          data: {
+            title: m.title,
+            eyebrow: m.eyebrow,
+            duration: m.duration || "10 menit",
+            accent: m.accent,
+            order: m.order ?? mIndex,
+          },
+        });
+      }
       keepModuleIds.push(moduleId);
 
       if (!existingModuleIds.has(m.id)) {
@@ -874,6 +1143,23 @@ export async function saveCourseStructure(
         }
       }
     }
+
+    // Bersihkan berkas materi yang tidak lagi dipakai blok mana pun.
+    const usedFileIds = input.modules
+      .flatMap((m) => m.blocks)
+      .map((b) => {
+        const material = b.material as { pdfFileId?: string } | undefined;
+        return material?.pdfFileId;
+      })
+      .filter((id): id is string => Boolean(id));
+    await prisma.storedFile.deleteMany({
+      where: {
+        courseId,
+        isPublic: true,
+        ownerId: me.id,
+        ...(usedFileIds.length ? { id: { notIn: usedFileIds } } : {}),
+      },
+    });
 
     // Hapus blok & modul yang tidak lagi ada.
     const removedBlocks = [...existingBlockIds].filter((id) => !keepBlockIds.includes(id));
