@@ -39,6 +39,7 @@ enum EnrollmentStatus {
 enum BlockType {
   TEXT
   VIDEO
+  LINK
   ACTIVITY
   QUIZ
   ASSIGNMENT
@@ -155,6 +156,8 @@ model Module {
   course   Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
   title    String
   eyebrow  String  @default("")
+  /// Estimasi waktu tampil terpisah dari eyebrow agar format rapi.
+  duration String  @default("10 menit")
   accent   String  @default("violet")
   order    Int     @default(0)
 
@@ -300,6 +303,8 @@ model Submission {
   block      LessonBlock      @relation(fields: [blockId], references: [id], onDelete: Cascade)
   response   String           @default("")
   fileUrl    String?
+  fileName   String?
+  fileType   String?
   score      Int?
   maxScore   Int              @default(100)
   feedback   String?
@@ -399,6 +404,24 @@ model PlatformSetting {
   appName   String   @default("EduVerse")
   accent    String   @default("#7C5CFC")
   updatedAt DateTime @updatedAt
+}
+
+/// Berkas (PDF/gambar) yang diunggah guru atau siswa.
+/// Disimpan di database agar materi & bukti jawaban tidak hilang saat browser ditutup.
+model StoredFile {
+  id        String   @id @default(cuid())
+  ownerId   String?
+  courseId  String?
+  fileName  String
+  mimeType  String
+  size      Int
+  /// Materi publik boleh dibaca peserta tanpa login; jawaban siswa tetap privat.
+  isPublic  Boolean  @default(false)
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([courseId])
+  @@index([ownerId])
 }
 
 model ForumPost {
