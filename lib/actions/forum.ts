@@ -1,197 +1,253 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 import type { ForumPost } from "@/components/DiscussionForum";
 
+type Viewer = { id: string; fullName: string; role: "TEACHER" | "STUDENT" | "ADMIN"; className: string | null } | null;
+
+/** Sesi forum: guru/siswa login, atau tamu (tanpa akun) untuk alur link siswa. */
+async function getViewer(): Promise<Viewer> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    const profile = await prisma.profile.findUnique({ where: { id: user.id } });
+    if (!profile || !profile.isActive) return null;
+    return {
+      id: profile.id,
+      fullName: profile.fullName,
+      role: profile.role,
+      className: profile.className,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Guru pemilik course (atau Admin) boleh menghapus seluruh diskusi modul. */
+async function canModerateModule(moduleId: string, viewer: Viewer) {
+  if (!viewer) return false;
+  if (viewer.role === "ADMIN") return true;
+  if (viewer.role !== "TEACHER") return false;
+  const module = await prisma.module.findUnique({
+    where: { id: moduleId },
+    select: { course: { select: { ownerId: true } } },
+  });
+  return module?.course.ownerId === viewer.id;
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /**
- * Mengambil daftar postingan forum diskusi berdasarkan modul tertentu.
- * Data forum bersifat spesifik per modul (beda modul, beda data diskusi).
+ * Forum diskusi milik satu modul. Setiap modul punya ruangnya sendiri di
+ * database (difilter moduleId + course), jadi data tidak bercampur antar modul.
  */
 export async function getForumPostsByModule(
   moduleId: string,
-  courseSlug: string = "operasi-bilangan-bulat"
+  courseSlug?: string
 ): Promise<ForumPost[]> {
   try {
-    const rawPosts = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT "id", "moduleId", "courseSlug", "authorId", "authorName", "role", "className", "title", "content", "likes", "createdAt"
-       FROM "ForumPost"
-       WHERE "moduleId" = $1 AND "courseSlug" = $2
-       ORDER BY "createdAt" DESC;`,
-      moduleId,
-      courseSlug
-    );
+    if (!moduleId) return [];
+    const module = await prisma.module.findUnique({
+      where: { id: moduleId },
+      select: { id: true, course: { select: { slug: true } } },
+    });
+    if (!module) return [];
+    if (courseSlug && module.course.slug !== courseSlug) return [];
 
-    const posts: ForumPost[] = [];
+    const posts = await prisma.forumPost.findMany({
+      where: { moduleId },
+      orderBy: { createdAt: "desc" },
+      include: { replies: { orderBy: { createdAt: "asc" } } },
+    });
 
-    for (const p of rawPosts) {
-      const rawReplies = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT "id", "postId", "authorId", "authorName", "role", "content", "likes", "isVerified", "createdAt"
-         FROM "ForumReply"
-         WHERE "postId" = $1
-         ORDER BY "createdAt" ASC;`,
-        p.id
-      );
-
-      posts.push({
-        id: p.id,
-        author: p.authorName,
-        role: p.role as "TEACHER" | "STUDENT",
-        className: p.className ?? undefined,
-        title: p.title,
-        content: p.content,
-        createdAt: new Date(p.createdAt).toLocaleDateString("id-ID", {
-          day: "numeric",
-          month: "short",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        likes: p.likes ?? 0,
-        replies: rawReplies.map((r) => ({
-          id: r.id,
-          author: r.authorName,
-          role: r.role as "TEACHER" | "STUDENT",
-          content: r.content,
-          createdAt: new Date(r.createdAt).toLocaleDateString("id-ID", {
-            day: "numeric",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          likes: r.likes ?? 0,
-          isVerified: r.isVerified ?? false,
-        })),
-      });
-    }
-
-    return posts;
-  } catch (err) {
-    console.error("Gagal mengambil data forum:", err);
+    return posts.map((post) => ({
+      id: post.id,
+      moduleId: post.moduleId,
+      courseSlug: post.courseSlug,
+      authorId: post.authorId,
+      author: post.authorName,
+      role: post.role === "TEACHER" ? "TEACHER" : "STUDENT",
+      className: post.className ?? undefined,
+      title: post.title,
+      content: post.content,
+      createdAt: formatTime(post.createdAt),
+      likes: post.likes,
+      replies: post.replies.map((reply) => ({
+        id: reply.id,
+        authorId: reply.authorId,
+        author: reply.authorName,
+        role: reply.role === "TEACHER" ? "TEACHER" : "STUDENT",
+        content: reply.content,
+        createdAt: formatTime(reply.createdAt),
+        likes: reply.likes,
+        isVerified: reply.isVerified,
+      })),
+    }));
+  } catch (error) {
+    console.error("Gagal mengambil data forum:", error);
     return [];
   }
 }
 
-/**
- * Siswa atau Guru membuat pertanyaan forum baru pada modul yang sedang dibuka.
- */
+/** Siswa/guru membuat pertanyaan baru pada forum modul tertentu. */
 export async function createForumPost(input: {
   moduleId: string;
-  courseSlug: string;
+  courseSlug?: string;
   title: string;
   content: string;
+  guestName?: string;
+  guestClass?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const title = input.title.trim();
+    const content = input.content.trim();
+    if (!title || !content) return { ok: false, error: "Judul dan isi pertanyaan wajib diisi." };
 
-    let authorId = user?.id || "guest-" + Date.now();
-    let authorName = "Pengguna EduVerse";
-    let role = "STUDENT";
-    let className: string | null = "VII-B";
+    const module = await prisma.module.findUnique({
+      where: { id: input.moduleId },
+      select: { course: { select: { slug: true } } },
+    });
+    if (!module) return { ok: false, error: "Modul tidak ditemukan." };
 
-    if (user) {
-      const profile = await prisma.profile.findUnique({ where: { id: user.id } });
-      if (profile) {
-        authorName = profile.fullName;
-        role = profile.role;
-        className = profile.className;
-      }
-    }
+    const viewer = await getViewer();
+    const guestName = input.guestName?.trim();
+    const authorName = viewer?.fullName || guestName || "Pengguna EduVerse";
+    const role = viewer?.role === "TEACHER" ? "TEACHER" : "STUDENT";
+    const className = viewer?.className || input.guestClass || null;
 
-    const id = "fp-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
-
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "ForumPost" ("id", "moduleId", "courseSlug", "authorId", "authorName", "role", "className", "title", "content", "likes", "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, NOW());`,
-      id,
-      input.moduleId,
-      input.courseSlug,
-      authorId,
-      authorName,
-      role,
-      className,
-      input.title.trim(),
-      input.content.trim()
-    );
+    await prisma.forumPost.create({
+      data: {
+        moduleId: input.moduleId,
+        courseSlug: module.course.slug,
+        authorId: viewer?.id ?? `guest-${randomUUID()}`,
+        authorName,
+        role,
+        className,
+        title,
+        content,
+      },
+    });
 
     return { ok: true };
-  } catch (err: any) {
-    return { ok: false, error: err.message || "Gagal membuat pertanyaan." };
+  } catch (error) {
+    console.error("Gagal membuat pertanyaan forum:", error);
+    return { ok: false, error: "Gagal membuat pertanyaan. Coba lagi." };
   }
 }
 
-/**
- * Menambahkan balasan pada pertanyaan forum diskusi.
- */
+/** Balasan pada pertanyaan forum. Guru otomatis ditandai sebagai jawaban guru. */
 export async function replyForumPost(input: {
   postId: string;
   content: string;
+  guestName?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const content = input.content.trim();
+    if (!content) return { ok: false, error: "Tanggapan wajib diisi." };
 
-    let authorId = user?.id || "guest-" + Date.now();
-    let authorName = "Pengguna EduVerse";
-    let role = "STUDENT";
+    const post = await prisma.forumPost.findUnique({ where: { id: input.postId }, select: { id: true } });
+    if (!post) return { ok: false, error: "Diskusi tidak ditemukan." };
 
-    if (user) {
-      const profile = await prisma.profile.findUnique({ where: { id: user.id } });
-      if (profile) {
-        authorName = profile.fullName;
-        role = profile.role;
-      }
-    }
+    const viewer = await getViewer();
+    const guestName = input.guestName?.trim();
+    const role = viewer?.role === "TEACHER" ? "TEACHER" : "STUDENT";
 
-    const id = "fr-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
-    const isVerified = role === "TEACHER";
-
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "ForumReply" ("id", "postId", "authorId", "authorName", "role", "content", "likes", "isVerified", "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, 0, $7, NOW());`,
-      id,
-      input.postId,
-      authorId,
-      authorName,
-      role,
-      input.content.trim(),
-      isVerified
-    );
+    await prisma.forumReply.create({
+      data: {
+        postId: input.postId,
+        authorId: viewer?.id ?? `guest-${randomUUID()}`,
+        authorName: viewer?.fullName || guestName || "Pengguna EduVerse",
+        role,
+        content,
+        isVerified: role === "TEACHER",
+      },
+    });
 
     return { ok: true };
-  } catch (err: any) {
-    return { ok: false, error: err.message || "Gagal mengirim tanggapan." };
+  } catch (error) {
+    console.error("Gagal mengirim tanggapan:", error);
+    return { ok: false, error: "Gagal mengirim tanggapan." };
   }
 }
 
-/**
- * Menyukai (like / upvote) pertanyaan forum
- */
+/** Hapus pertanyaan: guru pemilik course boleh semua, siswa hanya miliknya. */
+export async function deleteForumPost(postId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const viewer = await getViewer();
+    if (!viewer) return { ok: false, error: "Login dulu untuk menghapus diskusi." };
+
+    const post = await prisma.forumPost.findUnique({
+      where: { id: postId },
+      select: { moduleId: true, authorId: true },
+    });
+    if (!post) return { ok: false, error: "Diskusi tidak ditemukan." };
+
+    const moderator = await canModerateModule(post.moduleId, viewer);
+    const own = viewer.role === "STUDENT" && post.authorId === viewer.id;
+    if (!moderator && !own) {
+      return { ok: false, error: "Siswa hanya bisa menghapus pertanyaannya sendiri." };
+    }
+
+    await prisma.forumPost.delete({ where: { id: postId } });
+    return { ok: true };
+  } catch (error) {
+    console.error("Gagal menghapus pertanyaan:", error);
+    return { ok: false, error: "Gagal menghapus pertanyaan." };
+  }
+}
+
+/** Hapus tanggapan: guru pemilik course boleh semua, siswa hanya miliknya. */
+export async function deleteForumReply(replyId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const viewer = await getViewer();
+    if (!viewer) return { ok: false, error: "Login dulu untuk menghapus tanggapan." };
+
+    const reply = await prisma.forumReply.findUnique({
+      where: { id: replyId },
+      select: { authorId: true, post: { select: { moduleId: true } } },
+    });
+    if (!reply) return { ok: false, error: "Tanggapan tidak ditemukan." };
+
+    const moderator = await canModerateModule(reply.post.moduleId, viewer);
+    const own = viewer.role === "STUDENT" && reply.authorId === viewer.id;
+    if (!moderator && !own) {
+      return { ok: false, error: "Siswa hanya bisa menghapus tanggapannya sendiri." };
+    }
+
+    await prisma.forumReply.delete({ where: { id: replyId } });
+    return { ok: true };
+  } catch (error) {
+    console.error("Gagal menghapus tanggapan:", error);
+    return { ok: false, error: "Gagal menghapus tanggapan." };
+  }
+}
+
+/** Menyukai pertanyaan forum. */
 export async function toggleLikePost(postId: string): Promise<{ ok: boolean }> {
   try {
-    await prisma.$executeRawUnsafe(
-      `UPDATE "ForumPost" SET "likes" = "likes" + 1 WHERE "id" = $1;`,
-      postId
-    );
+    await prisma.forumPost.update({ where: { id: postId }, data: { likes: { increment: 1 } } });
     return { ok: true };
   } catch {
     return { ok: false };
   }
 }
 
-/**
- * Menyukai balasan forum
- */
+/** Menyukai balasan forum. */
 export async function toggleLikeReply(replyId: string): Promise<{ ok: boolean }> {
   try {
-    await prisma.$executeRawUnsafe(
-      `UPDATE "ForumReply" SET "likes" = "likes" + 1 WHERE "id" = $1;`,
-      replyId
-    );
+    await prisma.forumReply.update({ where: { id: replyId }, data: { likes: { increment: 1 } } });
     return { ok: true };
   } catch {
     return { ok: false };
