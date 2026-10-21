@@ -1,0 +1,26 @@
+Progress: resolved 0, reused 1, downloaded 0, added 0
+Progress: resolved 11, reused 11, downloaded 0, added 0
+Progress: resolved 116, reused 82, downloaded 0, added 0
+Progress: resolved 264, reused 193, downloaded 0, added 0
+Progress: resolved 356, reused 272, downloaded 0, added 0
+Progress: resolved 402, reused 318, downloaded 0, added 0
+Progress: resolved 427, reused 343, downloaded 0, added 0
+Packages: +309
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 456, reused 348, downloaded 0, added 0
+Progress: resolved 456, reused 349, downloaded 0, added 0
+Progress: resolved 456, reused 349, downloaded 0, added 1
+Progress: resolved 456, reused 349, downloaded 0, added 1, done
+ EPERM  EPERM: operation not permitted, symlink 'C:\Users\Farouq\Documents\00MyProject\EduVerseNew\node_modules\.pnpm\open@11.0.4\node_modules\open' -> 'C:\Users\Farouq\Documents\00MyProject\EduVerseNew\node_modules\.pnpm\node_modules\open'
+
+pnpm: EPERM: operation not permitted, symlink 'C:\Users\Farouq\Documents\00MyProject\EduVerseNew\node_modules\.pnpm\open@11.0.4\node_modules\open' -> 'C:\Users\Farouq\Documents\00MyProject\EduVerseNew\node_modules\.pnpm\node_modules\open'
+    at async Object.symlink (node:internal/fs/promises:999:10)
+    at async forceSymlink (C:\Users\Farouq\AppData\Local\node\corepack\v1\pnpm\10.12.1\dist\pnpm.cjs:95589:9)
+    at async symlinkHoistedDependency (C:\Users\Farouq\AppData\Local\node\corepack\v1\pnpm\10.12.1\dist\pnpm.cjs:143373:9)
+    at async Promise.all (index 0)
+    at async C:\Users\Farouq\AppData\Local\node\corepack\v1\pnpm\10.12.1\dist\pnpm.cjs:143364:9
+    at async Promise.all (index 28)
+    at async symlinkHoistedDependencies (C:\Users\Farouq\AppData\Local\node\corepack\v1\pnpm\10.12.1\dist\pnpm.cjs:143350:7)
+    at async hoist (C:\Users\Farouq\AppData\Local\node\corepack\v1\pnpm\10.12.1\dist\pnpm.cjs:143226:7)
+    at async linkPackages (C:\Users\Farouq\AppData\Local\node\corepack\v1\pnpm\10.12.1\dist\pnpm.cjs:188001:34)
+    at async _installInContext (C:\Users\Farouq\AppData\Local\node\corepack\v1\pnpm\10.12.1\dist\pnpm.cjs:189337:25)
