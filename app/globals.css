@@ -1383,3 +1383,143 @@ h3 { font-size: 1.05rem; line-height: 1.25; }
   .student-topbar__left { gap: 9px; }
   .student-topbar__link { padding: 7px 10px; font-size: 0.66rem; }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Sinkronisasi, panel jawaban siswa, forum, dan lampiran berkas
+   ───────────────────────────────────────────────────────────── */
+.sync-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 130px;
+  padding: 26px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+.sync-loading strong { color: var(--text); font-size: 0.9rem; }
+.sync-loading span { font-size: 0.76rem; }
+
+.sync-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(124, 92, 252, 0.25);
+  border-radius: 12px;
+  color: var(--violet);
+  background: rgba(124, 92, 252, 0.08);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.forum-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.forum-modal {
+  width: min(920px, calc(100% - 32px));
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.forum-modal .discussion-forum { margin-top: 8px; }
+
+.field-static {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--muted-strong);
+  background: var(--surface-soft);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.answer-panel { display: grid; gap: 14px; }
+.answer-panel h2 { font-size: 1.12rem; }
+.answer-panel .form-grid { margin-top: 4px; }
+
+.file-upload-zone {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  color: var(--violet);
+  background: var(--surface-soft);
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.file-upload-zone input { display: none; }
+
+.file-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid rgba(124, 92, 252, 0.28);
+  border-radius: 999px;
+  color: var(--violet);
+  background: rgba(124, 92, 252, 0.08);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.file-chip:hover { background: rgba(124, 92, 252, 0.16); }
+
+.attachment-preview img {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.link-lesson-card {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+.link-lesson-card__icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  border-radius: 16px;
+  color: #fff;
+  background: var(--violet);
+}
+.link-lesson-card h2 { margin: 0 0 6px; font-size: 1.1rem; }
+.link-lesson-card p { margin: 0 0 14px; color: var(--muted); font-size: 0.82rem; line-height: 1.6; }
+
+:root[data-theme='dark'] .field-static,
+:root[data-theme='dark'] .file-upload-zone {
+  background: var(--surface-soft);
+}
+
+@media (max-width: 720px) {
+  .link-lesson-card { flex-direction: column; }
+  .forum-modal { max-height: 92vh; }
+}

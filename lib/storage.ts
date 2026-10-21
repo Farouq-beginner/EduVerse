@@ -1,4 +1,4 @@
-import { defaultGameConfig, defaultGameStudioConfigs, defaultQuizDraft, demoCourse, seedParticipants, type ActivityConfig, type GameConfig, type GameStudioConfig, type GameTemplateId, type LessonBlock, type Module, type Participant, type QuizDraft, type StudentSubmission } from "./demo-data";
+import { defaultGameConfig, defaultGameStudioConfigs, demoCourse, type ActivityConfig, type GameConfig, type GameStudioConfig, type GameTemplateId, type LessonBlock, type Module, type Participant, type QuizDraft, type StudentSubmission } from "./demo-data";
 
 const keys = {
   theme: "eduverse-theme",
@@ -159,15 +159,9 @@ export function getCourseModules(): Module[] {
   }));
 }
 
+/** Peserta lokal hanya dipakai sebagai cadangan tampilan; sumber utama tetap database. */
 export function getParticipants(): Participant[] {
-  const joined = read<Participant[]>(keys.participants, []);
-  const list = [...seedParticipants];
-  joined.forEach((person) => {
-    const index = list.findIndex((item) => item.id === person.id);
-    if (index >= 0) list[index] = { ...list[index], ...person };
-    else list.push(person);
-  });
-  return list;
+  return read<Participant[]>(keys.participants, []);
 }
 
 /** Daftarkan peserta baru (hasil join lewat link siswa) ke workspace guru. */
@@ -191,20 +185,38 @@ export function registerParticipant(identity: ParticipantIdentity): Participant[
 
 export function saveCourseModules(modules: Module[]) {
   write(keys.modules, modules);
-}
-
-export function getSubmissions(): StudentSubmission[] {
+}export function getSubmissions(): StudentSubmission[] {
   return read<StudentSubmission[]>(keys.submissions, []);
 }
-
 export function saveSubmission(submission: StudentSubmission) {
   const current = getSubmissions();
   write(keys.submissions, [...current.filter((item) => item.id !== submission.id), submission]);
 }
 
+export function getSubmissionById(participantId: string, blockId: string): StudentSubmission | undefined {
+  return getSubmissions().find(
+    (item) => item.participantId === participantId && item.blockId === blockId
+  );
+}
+
+/**
+ * Draft lokal hanya dikembalikan bila memang pernah disimpan untuk blok ini.
+ * Kuis baru selalu mulai kosong — tidak mewarisi soal contoh dari kuis lain.
+ */
 export function getQuizDraft(blockId = "block-quiz"): QuizDraft {
   const saved = read<QuizDraft | null>(keys.quizDraft, null);
-  return saved && saved.blockId === blockId ? saved : { ...defaultQuizDraft, blockId };
+  if (saved && saved.blockId === blockId) return saved;
+  return {
+    blockId,
+    title: "",
+    instructions: "",
+    showScore: true,
+    totalPoints: 0,
+    attempts: 1,
+    shuffle: false,
+    passThreshold: 70,
+    questions: [],
+  };
 }
 
 export function saveQuizDraft(draft: QuizDraft) {

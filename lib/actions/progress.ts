@@ -57,6 +57,60 @@ export async function markBlockComplete(input: {
   return { ok: true };
 }
 
+/**
+ * Menyimpan beberapa blok sekaligus (dipakai saat siswa login dan progres
+ * perangkatnya perlu dipindahkan ke database). Hanya blok milik course yang
+ * valid & hanya untuk siswa yang sudah bergabung.
+ */
+export async function syncBlockCompletions(input: {
+  courseId: string;
+  blockIds: string[];
+}): Promise<{ ok: boolean; saved: number; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, saved: 0, error: "Sesi berakhir. Silakan login." };
+
+  const enrollment = await prisma.enrollment.findUnique({
+    where: { studentId_courseId: { studentId: user.id, courseId: input.courseId } },
+  });
+  if (!enrollment || enrollment.status !== "ACTIVE")
+    return { ok: false, saved: 0, error: "Kamu belum bergabung ke pembelajaran ini." };
+
+  const valid = await prisma.lessonBlock.findMany({
+    where: { id: { in: input.blockIds }, module: { courseId: input.courseId } },
+    select: { id: true },
+  });
+
+  let saved = 0;
+  for (const block of valid) {
+    try {
+      await prisma.progress.upsert({
+        where: { studentId_blockId: { studentId: user.id, blockId: block.id } },
+        update: { completed: true, completedAt: new Date() },
+        create: {
+          studentId: user.id,
+          courseId: input.courseId,
+          blockId: block.id,
+          completed: true,
+          completedAt: new Date(),
+          eventId: `${user.id}-${block.id}`,
+        },
+      });
+      saved += 1;
+    } catch {
+      const existing = await prisma.progress.findFirst({
+        where: { studentId: user.id, blockId: block.id },
+      });
+      if (existing) saved += 1;
+    }
+  }
+
+  await recalcEnrollmentProgress(user.id, input.courseId);
+  return { ok: true, saved };
+}
+
 /** Menghitung ulang progres rata-rata enrollment setelah ada perubahan blok. */
 async function recalcEnrollmentProgress(studentId: string, courseId: string) {
   const [done, total] = await Promise.all([
@@ -83,6 +137,8 @@ export async function submitAssignment(input: {
   blockId: string;
   response: string;
   fileUrl?: string;
+  fileName?: string;
+  fileType?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
   const {
@@ -108,6 +164,8 @@ export async function submitAssignment(input: {
       update: {
         response: input.response,
         fileUrl: input.fileUrl ?? null,
+        fileName: input.fileName ?? null,
+        fileType: input.fileType ?? null,
         status: "SUBMITTED",
         submittedAt: new Date(),
       },
@@ -117,6 +175,8 @@ export async function submitAssignment(input: {
         blockId: input.blockId,
         response: input.response,
         fileUrl: input.fileUrl ?? null,
+        fileName: input.fileName ?? null,
+        fileType: input.fileType ?? null,
         status: "SUBMITTED",
         eventId,
       },

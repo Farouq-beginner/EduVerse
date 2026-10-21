@@ -4,7 +4,7 @@ export type AccessState = "open" | "locked";
 export type LessonBlock = {
   id: string;
   moduleId?: string;
-  type: "text" | "video" | "activity" | "quiz" | "assignment" | "game" | "reflection";
+  type: "text" | "video" | "link" | "activity" | "quiz" | "assignment" | "game" | "reflection";
   title: string;
   description: string;
   duration: string;
@@ -14,7 +14,14 @@ export type LessonBlock = {
     videoUrl?: string;
     driveUrl?: string;
     pdfUrl?: string;
+    /// File PDF yang tersimpan di database (dilayani lewat /api/files/[id]).
+    pdfFileId?: string;
+    /// Blok bertipe Link: URL bebas + judul + deskripsi.
+    linkUrl?: string;
+    linkTitle?: string;
+    linkDescription?: string;
     fileName?: string;
+    fileMime?: string;
     activity?: ActivityConfig;
     game?: GameBlockConfig;
   };
@@ -90,6 +97,7 @@ export type Module = {
   id: string;
   title: string;
   eyebrow: string;
+  duration?: string;
   accent: "violet" | "teal" | "yellow" | "coral";
   lessons: LessonBlock[];
 };
