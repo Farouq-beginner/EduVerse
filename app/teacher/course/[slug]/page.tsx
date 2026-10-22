@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
   Save,
   Sparkles,
   Trash2,
+  Upload,
   Video,
   X,
 } from "lucide-react";
@@ -27,21 +28,26 @@ import { StatusPill } from "@/components/DashboardBits";
 import { Toast } from "@/components/Toast";
 import { DiscussionForum } from "@/components/DiscussionForum";
 import {
-  activityTemplates,
+  blankWorksheet,
   gameTemplates,
-  type ActivityConfig,
   type GameBlockConfig,
+  type GameTemplateId,
   type LessonBlock,
   type Module,
+  type WorksheetConfig,
 } from "@/lib/demo-data";
 import {
   getTeacherCourseBuilder,
+  publishCourse,
+  removeCourseModuleDoc,
   saveCourseStructure,
-  updateCourseMeta,
+  setCourseModuleDoc,
   updateCourseSettings,
+  type DbCourse,
 } from "@/lib/actions/dashboards";
 import { deleteStoredFile } from "@/lib/actions/files";
 import { toModule, toSavePayload } from "@/lib/course";
+import { MATERIAL_ACCEPT, fileKindLabel, uploadCourseFile } from "@/lib/upload";
 
 const iconMap = {
   text: FileText,
@@ -60,41 +66,15 @@ const newBlockTemplates: Array<{ type: LessonBlock["type"]; label: string; icon:
   { type: "link", label: "Link", icon: Link2 },
   { type: "activity", label: "Aktivitas", icon: Sparkles },
   { type: "quiz", label: "Kuis", icon: ClipboardCheck },
-  { type: "assignment", label: "PDF / Tugas", icon: FileText },
+  { type: "assignment", label: "Lembar Kerja / Tugas", icon: FileText },
   { type: "game", label: "Game", icon: Gamepad2 },
 ];
 
-type MaterialDraft = {
-  text: string;
-  videoUrl: string;
-  driveUrl: string;
-  pdfUrl: string;
-  pdfFileId: string;
-  fileMime: string;
-  linkUrl: string;
-  linkTitle: string;
-  linkDescription: string;
-  fileName: string;
-  activity: ActivityConfig;
-  game: GameBlockConfig;
-};
+type CourseMeta = { title: string; description: string; subject: string; grade: string; duration: string };
+type ModuleDraft = { title: string; eyebrow: string; duration: string; accent: Module["accent"] };
 
-const blankActivity: ActivityConfig = {
-  templateId: "observing-questioning",
-  prompt: activityTemplates[0].prompt,
-  evidenceLabel: activityTemplates[0].evidenceLabel,
-  responseType: "interactive",
-  choices: [
-    { label: "A", value: "−8", correct: true },
-    { label: "B", value: "0" },
-    { label: "C", value: "8" },
-  ],
-  instructions: "Ikuti langkah aktivitas, tuliskan strategi yang kamu gunakan, lalu kirim jawaban untuk ditinjau guru.",
-  points: 10,
-  graded: true,
-  showScore: true,
-  rubric: "Strategi benar (5), proses terlihat (3), refleksi jelas (2).",
-};
+const blankMeta: CourseMeta = { title: "", description: "", subject: "", grade: "", duration: "" };
+
 const blankGame: GameBlockConfig = {
   gameId: "number-line-challenge",
   instructions: "Jawab tantangan operasi bilangan bulat dengan cepat dan tepat.",
@@ -102,22 +82,7 @@ const blankGame: GameBlockConfig = {
   graded: true,
   showScore: true,
   passThreshold: 70,
-};  const blankMaterial: MaterialDraft = {
-    text: "",
-    videoUrl: "",
-    driveUrl: "",
-    pdfUrl: "",
-    pdfFileId: "",
-    fileMime: "",
-    linkUrl: "",
-    linkTitle: "",
-    linkDescription: "",
-    fileName: "",
-    activity: blankActivity,
-    game: blankGame,
-  };
-
-type ModuleDraft = { title: string; eyebrow: string; duration: string; accent: Module["accent"] };
+};
 
 export default function CourseBuilderPage() {
   const params = useParams<{ slug: string }>();
@@ -125,28 +90,55 @@ export default function CourseBuilderPage() {
   const slug = params.slug;
 
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [courseId, setCourseId] = useState<string | null>(null);
   const [teacherName, setTeacherName] = useState("");
-  const [meta, setMeta] = useState({ title: "", description: "", subject: "", grade: "" });
-  const [metaSaving, setMetaSaving] = useState(false);
+  const [meta, setMeta] = useState<CourseMeta>(blankMeta);
+  const [modules, setModules] = useState<Module[]>([]);
   const [access, setAccess] = useState<"open" | "locked">("open");
   const [state, setState] = useState<"draft" | "published">("published");
-  const [modules, setModules] = useState<Module[]>([]);
-  const [blocks, setBlocks] = useState<LessonBlock[]>([]);
+  const [hasDraftChanges, setHasDraftChanges] = useState(false);
+  const [publishedAt, setPublishedAt] = useState<string | null>(null);
+  const [moduleDoc, setModuleDoc] = useState<{ fileId: string; name: string; mime: string } | null>(null);
+  const [draftStarted, setDraftStarted] = useState(false);
+  const [showDraftPrompt, setShowDraftPrompt] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState("");
   const [toast, setToast] = useState("");
   const [showAdd, setShowAdd] = useState<string | null>(null);
-  const [editingBlock, setEditingBlock] = useState<LessonBlock | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [linkTitle, setLinkTitle] = useState("");
-  const [linkDescription, setLinkDescription] = useState("");
-  const [material, setMaterial] = useState<MaterialDraft>(blankMaterial);
-  const [uploading, setUploading] = useState(false);
-  const [moduleDraft, setModuleDraft] = useState<ModuleDraft | null>(null);
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
+  const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
   const [forumModule, setForumModule] = useState<Module | null>(null);
+
+  const dataRef = useRef({ meta, modules });
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savePromise = useRef<Promise<DbCourse | null> | null>(null);
+  const rollbackRef = useRef<{ meta: CourseMeta; modules: Module[]; hasDraftChanges: boolean } | null>(null);
+
+  useEffect(() => {
+    dataRef.current = { meta, modules };
+  }, [meta, modules]);
+
+  // Ups! halaman ditutup/refresh — draft yang sedang diketik tetap dikirim.
+  useEffect(() => {
+    function flush() {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+        void saveNow(true);
+      }
+    }
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", flush);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId]);
 
   // Muat struktur course milik guru ini dari database — tanpa data demo.
   useEffect(() => {
@@ -167,12 +159,22 @@ export default function CourseBuilderPage() {
           description: structure.description,
           subject: structure.subject,
           grade: structure.grade,
+          duration: structure.duration,
         });
         setAccess(structure.access === "LOCKED" ? "locked" : "open");
         setState(structure.state === "PUBLISHED" ? "published" : "draft");
-        const dbModules = structure.modules.map(toModule);
-        setModules(dbModules);
-        setBlocks(dbModules.flatMap((module) => module.lessons));
+        setHasDraftChanges(structure.hasDraftChanges);
+        setPublishedAt(structure.publishedAt);
+        setModuleDoc(
+          structure.moduleDocFileId
+            ? {
+                fileId: structure.moduleDocFileId,
+                name: structure.moduleDocName ?? "Modul",
+                mime: structure.moduleDocMime ?? "",
+              }
+            : null
+        );
+        setModules(structure.modules.map(toModule));
       } catch {
         if (active) setNotFound(true);
       } finally {
@@ -184,43 +186,145 @@ export default function CourseBuilderPage() {
     };
   }, [slug]);
 
+  /** Semua perubahan melewati gerbang draft: popup "Buat draft baru?" dulu. */
+  function commit(next: { meta?: CourseMeta; modules?: Module[] }) {
+    if (!draftStarted && !showDraftPrompt) {
+      rollbackRef.current = { meta: dataRef.current.meta, modules: dataRef.current.modules, hasDraftChanges };
+      setShowDraftPrompt(true);
+    }
+    if (next.meta) setMeta(next.meta);
+    if (next.modules) setModules(next.modules);
+    setHasDraftChanges(true);
+    if (draftStarted) scheduleSave();
+  }
+
+  function beginDraft() {
+    setDraftStarted(true);
+    setShowDraftPrompt(false);
+    rollbackRef.current = null;
+    scheduleSave();
+    setToast("Draft baru dibuat. Perubahan tersimpan otomatis dan belum terlihat siswa.");
+  }
+
+  function cancelDraft() {
+    if (rollbackRef.current) {
+      setMeta(rollbackRef.current.meta);
+      setModules(rollbackRef.current.modules);
+      setHasDraftChanges(rollbackRef.current.hasDraftChanges);
+    }
+    rollbackRef.current = null;
+    setShowDraftPrompt(false);
+  }
+
+  function scheduleSave() {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveNow(true);
+    }, 700);
+  }
+
+  /** Simpan seluruh draft (identitas + pertemuan + materi) ke database. */
+  async function saveNow(silent: boolean): Promise<DbCourse | null> {
+    if (!courseId) {
+      setToast("Pembelajaran belum ada di database.");
+      return null;
+    }
+    // Tunggu simpan yang sedang berjalan agar tidak ada dua tulisan bersamaan
+    // yang saling menimpa (penyebab materi seolah hilang / kembali seperti lama).
+    if (savePromise.current) await savePromise.current;
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+
+    const run = (async () => {
+      setSaving(true);
+      try {
+        const snapshot = dataRef.current;
+        const res = await saveCourseStructure(
+          courseId,
+          toSavePayload(snapshot.modules, {
+            title: snapshot.meta.title,
+            description: snapshot.meta.description,
+            subject: snapshot.meta.subject,
+            grade: snapshot.meta.grade,
+            duration: snapshot.meta.duration,
+          })
+        );
+        if (!res.ok) {
+          const message = res.error ?? "Gagal menyimpan draft.";
+          setSaveError(message);
+          setToast(message);
+          return null;
+        }
+        if (res.structure) adoptFreshIds(res.structure);
+        setSaveError("");
+        setSavedAt(new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }));
+        setHasDraftChanges(true);
+        if (!silent) setToast("Draft tersimpan. Tekan Publish agar siswa melihat perubahan.");
+        return res.structure ?? null;
+      } catch {
+        const message = "Koneksi ke database terputus. Perubahan belum tersimpan — coba Simpan Draft lagi.";
+        setSaveError(message);
+        setToast(message);
+        return null;
+      } finally {
+        setSaving(false);
+      }
+    })();
+
+    savePromise.current = run;
+    try {
+      return await run;
+    } finally {
+      savePromise.current = null;
+    }
+  }
+
+  /**
+   * Ambil id database hasil simpan tanpa menimpa suntingan yang lebih baru.
+   * Id lokal (baru dibuat) diganti id database, termasuk id yang sedang dibuka
+   * di editor — supaya editor tidak tertutup sendiri setelah autosave.
+   */
+  function adoptFreshIds(fresh: DbCourse) {
+    const current = dataRef.current.modules;
+    if (current.length !== fresh.modules.length) return;
+    if (current.some((module, index) => module.lessons.length !== fresh.modules[index].blocks.length)) return;
+
+    const idMap = new Map<string, string>();
+    fresh.modules.forEach((freshModule, moduleIndex) => {
+      const localModule = current[moduleIndex];
+      idMap.set(localModule.id, freshModule.id);
+      freshModule.blocks.forEach((freshBlock, blockIndex) => {
+        idMap.set(localModule.lessons[blockIndex].id, freshBlock.id);
+      });
+    });
+
+    setModules((previous) =>
+      previous.map((module, moduleIndex) => {
+        const freshModule = fresh.modules[moduleIndex];
+        if (!freshModule || module.lessons.length !== freshModule.blocks.length) return module;
+        return {
+          ...module,
+          id: freshModule.id,
+          lessons: module.lessons.map((block, blockIndex) => ({
+            ...block,
+            id: freshModule.blocks[blockIndex].id,
+            moduleId: freshModule.id,
+          })),
+        };
+      })
+    );
+
+    setEditingBlockId((id) => (id ? idMap.get(id) ?? id : id));
+    setEditingModuleId((id) => (id ? idMap.get(id) ?? id : id));
+    setShowAdd((id) => (id ? idMap.get(id) ?? id : id));
+    setForumModule((module) => (module ? { ...module, id: idMap.get(module.id) ?? module.id } : module));
+  }
+
   function copyLink() {
     navigator.clipboard?.writeText(`${window.location.origin}/learn/${slug}`);
     setToast("Link pembelajaran disalin.");
-  }
-
-  /** Modul efektif: blok urut modul + blok tambahan milik modul tersebut. */
-  function effectiveModules(nextBlocks: LessonBlock[] = blocks, nextModules: Module[] = modules): Module[] {
-    const byId = new Map(nextBlocks.map((block) => [block.id, block]));
-    return nextModules.map((module) => {
-      const ordered = module.lessons.map((seed) => byId.get(seed.id)).filter(Boolean) as LessonBlock[];
-      const extras = nextBlocks.filter(
-        (block) => block.moduleId === module.id && !module.lessons.some((lesson) => lesson.id === block.id)
-      );
-      return { ...module, lessons: [...ordered, ...extras] };
-    });
-  }
-
-  /** Simpan struktur (modul + blok) ke database guru, lalu muat ulang id baru. */
-  async function saveToDb(nextModules: Module[], nextBlocks: LessonBlock[]) {
-    if (!courseId) {
-      setToast("Course belum ada di database. Login sebagai guru pemilik course.");
-      return null;
-    }
-    setSyncing(true);
-    const res = await saveCourseStructure(courseId, toSavePayload(effectiveModules(nextBlocks, nextModules)));
-    setSyncing(false);
-    if (!res.ok) {
-      setToast(res.error ?? "Gagal menyimpan ke database.");
-      return null;
-    }
-    if (res.structure) {
-      const dbModules = res.structure.modules.map(toModule);
-      setModules(dbModules);
-      setBlocks(dbModules.flatMap((module) => module.lessons));
-    }
-    setToast("Perubahan tersimpan di database dan langsung terlihat siswa.");
-    return res.structure ?? null;
   }
 
   async function toggleAccess() {
@@ -234,233 +338,220 @@ export default function CourseBuilderPage() {
     setToast(next === "open" ? "Akses masuk dibuka." : "Akses baru dikunci.");
   }
 
-  async function togglePublish() {
-    const next = state === "published" ? "draft" : "published";
-    setState(next);
-    if (courseId) {
-      const res = await updateCourseSettings(courseId, { state: next });
-      setToast(res.ok ? (next === "published" ? "Versi terbaru dipublikasikan." : "Disimpan sebagai draft.") : res.error ?? "Gagal menyimpan pengaturan.");
+  async function publish() {
+    if (!courseId) return;
+    if (!window.confirm("Publikasikan versi terbaru? Siswa akan langsung melihat isi draft ini.")) return;
+    const saved = await saveNow(true);
+    if (!saved) {
+      setToast("Draft belum tersimpan, publish dibatalkan. Coba lagi.");
       return;
     }
-    setToast(next === "published" ? "Versi terbaru dipublikasikan." : "Disimpan sebagai draft.");
-  }
-
-  async function saveMeta() {
-    if (!courseId || !meta.title.trim()) return;
-    setMetaSaving(true);
-    const res = await updateCourseMeta(courseId, meta);
-    setMetaSaving(false);
-    setToast(res.ok ? "Identitas pembelajaran tersimpan." : res.error ?? "Gagal menyimpan identitas.");
+    const res = await publishCourse(courseId);
+    if (!res.ok) {
+      setToast(res.error ?? "Gagal mempublikasikan.");
+      return;
+    }
+    setState("published");
+    setHasDraftChanges(false);
+    setPublishedAt(res.publishedAt ?? new Date().toISOString());
+    setDraftStarted(true);
+    setToast("Pembelajaran dipublikasikan. Siswa sekarang melihat versi terbaru.");
   }
 
   function openAddModule() {
     const nextNumber = modules.length + 1;
-    setEditingModuleId(null);
-    setModuleDraft({
+    setEditingId(null);
+    setModuleDraftTarget({
       title: "",
-      eyebrow: `Modul ${String(nextNumber).padStart(2, "0")}`,
+      eyebrow: `Pertemuan ${String(nextNumber).padStart(2, "0")}`,
       duration: "10 menit",
       accent: "violet",
     });
   }
 
-  function openEditModule(module: Module) {
-    setEditingModuleId(module.id);
-    setModuleDraft({
-      title: module.title,
-      eyebrow: module.eyebrow || "",
-      duration: module.duration || "10 menit",
-      accent: module.accent,
+  // ── Pertemuan ───────────────────────────────────────────────────────────
+  const setEditingId = (id: string | null) => setEditingModuleId(id);
+  const [moduleDraftTarget, setModuleDraftTarget] = useState<ModuleDraft | null>(null);
+
+  function saveModuleDraft() {
+    if (!moduleDraftTarget || !moduleDraftTarget.title.trim()) {
+      setToast("Judul pertemuan wajib diisi.");
+      return;
+    }
+    const next: Module = {
+      id: `module-new-${Date.now()}`,
+      title: moduleDraftTarget.title.trim(),
+      eyebrow: moduleDraftTarget.eyebrow.trim() || `Pertemuan ${String(modules.length + 1).padStart(2, "0")}`,
+      duration: moduleDraftTarget.duration.trim() || "10 menit",
+      accent: moduleDraftTarget.accent,
+      lessons: [],
+    };
+    setModuleDraftTarget(null);
+    commit({ modules: [...modules, next] });
+  }
+
+  function patchModule(moduleId: string, patch: Partial<ModuleDraft>) {
+    commit({
+      modules: modules.map((module) => (module.id === moduleId ? { ...module, ...patch } : module)),
     });
   }
 
-  async function saveModule() {
-    if (!moduleDraft || !moduleDraft.title.trim()) {
-      setToast("Judul modul wajib diisi.");
-      return;
-    }
-    const draft = moduleDraft;
-    setModuleDraft(null);
-
-    if (editingModuleId) {
-      const next = modules.map((module) =>
-        module.id === editingModuleId
-          ? { ...module, title: draft.title.trim(), eyebrow: draft.eyebrow.trim(), duration: draft.duration.trim() || "10 menit", accent: draft.accent }
-          : module
-      );
-      setModules(next);
-      await saveToDb(next, blocks);
-      setToast("Modul diperbarui.");
-      return;
-    }
-
-    const temp: Module = {
-      id: `module-${Date.now()}`,
-      title: draft.title.trim(),
-      eyebrow: draft.eyebrow.trim() || `Modul ${String(modules.length + 1).padStart(2, "0")}`,
-      duration: draft.duration.trim() || "10 menit",
-      accent: draft.accent,
-      lessons: [],
-    };
-    const next = [...modules, temp];
-    setModules(next);
-    await saveToDb(next, blocks);
-  }
-
-  async function removeModule(moduleId: string) {
+  function removeModule(moduleId: string) {
     const module = modules.find((item) => item.id === moduleId);
     if (!module || !window.confirm(`Hapus ${module.title} beserta semua materinya?`)) return;
-    const nextModules = modules.filter((item) => item.id !== moduleId);
-    const nextBlocks = blocks.filter((block) => block.moduleId !== moduleId);
-    setModules(nextModules);
-    setBlocks(nextBlocks);
+    commit({ modules: modules.filter((item) => item.id !== moduleId) });
     setForumModule(null);
-    await saveToDb(nextModules, nextBlocks);
-    setToast("Modul dan materi di dalamnya dihapus.");
+    setToast("Pertemuan dan materi di dalamnya dihapus dari draft.");
   }
 
-  async function addBlock(moduleId: string, type: LessonBlock["type"], label: string) {
-    const id = `custom-${Date.now()}`;
-    const nextMaterial =
-      type === "activity"
-        ? { activity: { ...blankActivity } }
-        : type === "game"
-          ? { game: { ...blankGame } }
-          : type === "link"
-            ? { linkUrl: "" }
-            : {};
-    const next = [
-      ...blocks,
-      {
-        id,
-        moduleId,
-        type,
-        title: `${label} baru`,
-        description: type === "link" ? "Tulis deskripsi singkat link ini." : "Isi materi ini dari editor blok.",
-        duration: "05 menit",
-        status: "new" as const,
-        material: nextMaterial,
-      },
-    ];
-    setBlocks(next);
+  // ── Materi ──────────────────────────────────────────────────────────────
+  function addBlock(moduleId: string, type: LessonBlock["type"], label: string) {
+    const block: LessonBlock = {
+      id: `block-new-${Date.now()}`,
+      moduleId,
+      type,
+      title: `${label} baru`,
+      description: "Isi materi ini dari editor.",
+      duration: "05 menit",
+      status: "new",
+      material:
+        type === "activity"
+          ? { activity: { visualId: "number-line-lab" } }
+          : type === "game"
+            ? { game: { ...blankGame } }
+            : type === "link"
+              ? { linkUrl: "" }
+              : {},
+    };
+    const next = modules.map((module) =>
+      module.id === moduleId ? { ...module, lessons: [...module.lessons, block] } : module
+    );
     setShowAdd(null);
-    const structure = await saveToDb(modules, next);
+    setEditingBlockId(type === "quiz" ? null : block.id);
+    commit({ modules: next });
     if (type === "quiz") {
-      // Blok kuis baru hanya punya id database setelah disimpan.
-      const dbModule = structure?.modules.find((item) => item.id === moduleId);
-      const dbBlock = dbModule?.blocks[dbModule.blocks.length - 1];
-      const quizBlockId = dbBlock?.id ?? id;
-      router.push(`/teacher/course/${slug}/quiz/${quizBlockId}`);
-      return;
+      setToast("Blok kuis ditambahkan. Klik ikon pensil pada materi kuis untuk mengisi soal.");
     }
-    setToast(`${label} ditambahkan ke ${modules.find((module) => module.id === moduleId)?.title}.`);
   }
 
-  function openEditor(block: LessonBlock) {
-    if (block.type === "quiz") {
+  /** Buka editor kuis; simpan draft dulu bila bloknya belum punya id database. */
+  async function openQuizEditor(block: LessonBlock, moduleId: string) {
+    if (!block.id.startsWith("block-new-")) {
       router.push(`/teacher/course/${slug}/quiz/${block.id}`);
       return;
     }
-    setEditingBlock(block);
-    setEditTitle(block.title);
-    setEditDescription(block.description);
-    setLinkTitle(block.material?.linkTitle ?? "");
-    setLinkDescription(block.material?.linkDescription ?? "");
-    setMaterial({
-      ...blankMaterial,
-      ...block.material,
-      pdfFileId: block.material?.pdfFileId ?? "",
-      fileMime: block.material?.fileMime ?? "",
-      linkUrl: block.material?.linkUrl ?? "",
-      linkTitle: block.material?.linkTitle ?? "",
-      linkDescription: block.material?.linkDescription ?? "",
-      activity: {
-        ...blankActivity,
-        ...block.material?.activity,
-        templateId: block.material?.activity?.templateId || blankActivity.templateId,
-        prompt: block.material?.activity?.prompt || blankActivity.prompt,
-        evidenceLabel: block.material?.activity?.evidenceLabel || blankActivity.evidenceLabel,
-      },
-      game: { ...blankGame, ...block.material?.game },
+    const fresh = await saveNow(true);
+    if (!fresh) {
+      setToast("Kuis belum tersimpan. Tekan Simpan Draft lalu coba lagi.");
+      return;
+    }
+    const moduleIndex = modules.findIndex((module) => module.id === moduleId);
+    const freshModule = fresh.modules[moduleIndex];
+    const target = freshModule?.blocks.find((item) => item.type.toUpperCase() === "QUIZ" && item.title === block.title);
+    if (target) router.push(`/teacher/course/${slug}/quiz/${target.id}`);
+  }
+
+  function patchBlock(blockId: string, patch: Partial<LessonBlock>) {
+    commit({
+      modules: modules.map((module) => ({
+        ...module,
+        lessons: module.lessons.map((block) => (block.id === blockId ? { ...block, ...patch } : block)),
+      })),
     });
   }
 
-  async function handlePdfUpload(event: ChangeEvent<HTMLInputElement>) {
+  function patchMaterial(blockId: string, patch: Record<string, unknown>) {
+    const block = modules.flatMap((module) => module.lessons).find((item) => item.id === blockId);
+    const material = { ...(block?.material ?? {}), ...patch } as LessonBlock["material"];
+    commit({
+      modules: modules.map((module) => ({
+        ...module,
+        lessons: module.lessons.map((item) => (item.id === blockId ? { ...item, material } : item)),
+      })),
+    });
+  }
+
+  function updateWorksheet(blockId: string, current: WorksheetConfig | undefined, patch: Partial<WorksheetConfig>) {
+    patchMaterial(blockId, { worksheet: { ...blankWorksheet, ...(current ?? {}), ...patch } });
+  }
+
+  function removeBlock(blockId: string) {
+    if (!window.confirm("Hapus materi ini dari draft?")) return;
+    commit({
+      modules: modules.map((module) => ({
+        ...module,
+        lessons: module.lessons.filter((block) => block.id !== blockId),
+      })),
+    });
+    if (editingBlockId === blockId) setEditingBlockId(null);
+    setToast("Materi dihapus dari draft.");
+  }
+
+  async function handleBlockUpload(block: LessonBlock, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !courseId) return;
-    if (file.type !== "application/pdf") {
-      setToast("Pilih berkas PDF.");
+    setUploadingBlockId(block.id);
+    const result = await uploadCourseFile({ file, courseId, purpose: "material" });
+    setUploadingBlockId(null);
+    if (!result.ok || !result.file) {
+      setToast(result.error ?? "Gagal mengunggah berkas.");
       return;
     }
-    if (file.size > 8 * 1024 * 1024) {
-      setToast("Ukuran PDF maksimal 8 MB.");
-      return;
-    }
-    setUploading(true);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("courseId", courseId);
-      form.append("purpose", "material");
-      const response = await fetch("/api/files", { method: "POST", body: form });
-      const data = (await response.json()) as { ok?: boolean; url?: string; fileId?: string; fileName?: string; mimeType?: string; error?: string };
-      if (!response.ok || !data.ok || !data.url) {
-        setToast(data.error ?? "Gagal mengunggah PDF.");
-        return;
-      }
-      setMaterial((current) => ({
-        ...current,
-        pdfUrl: data.url!,
-        pdfFileId: data.fileId ?? "",
-        fileName: data.fileName ?? file.name,
-        fileMime: data.mimeType ?? "application/pdf",
-      }));
-      setToast("PDF tersimpan di database.");
-    } catch {
-      setToast("Gagal mengunggah PDF.");
-    } finally {
-      setUploading(false);
-    }
+    patchMaterial(block.id, {
+      pdfUrl: result.file.url,
+      pdfFileId: result.file.fileId,
+      fileName: result.file.fileName,
+      fileMime: result.file.mimeType,
+    });
+    setToast(`${fileKindLabel(result.file.mimeType, result.file.fileName)} tersimpan di draft.`);
   }
 
-  async function removePdf() {
-    const fileId = material.pdfFileId;
-    setMaterial((current) => ({ ...current, pdfUrl: "", pdfFileId: "", fileName: "", fileMime: "" }));
+  async function removeBlockFile(block: LessonBlock) {
+    const fileId = block.material?.pdfFileId;
+    patchMaterial(block.id, { pdfUrl: "", pdfFileId: "", fileName: "", fileMime: "" });
     if (fileId) await deleteStoredFile(fileId).catch(() => undefined);
-    setToast("Berkas PDF dihapus dari materi.");
+    setToast("Berkas materi dihapus.");
   }
 
-  async function saveBlockEdit() {
-    if (!editingBlock || !editTitle.trim()) return;
-    const next = blocks.map((item) =>
-      item.id === editingBlock.id
-        ? {
-            ...item,
-            title: editTitle.trim(),
-            description: editDescription.trim() || item.description,
-            material: {
-              ...material,
-              linkTitle: linkTitle.trim() || (material.linkUrl ? "Link" : ""),
-              linkDescription: linkDescription.trim() || "",
-            },
-          }
-        : item
-    );
-    setBlocks(next);
-    setEditingBlock(null);
-    await saveToDb(modules, next);
-    setToast("Materi blok disimpan dan siap tampil di halaman siswa.");
+  async function handleModuleDocUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !courseId) return;
+    setUploadingDoc(true);
+    const result = await uploadCourseFile({ file, courseId, purpose: "module-doc" });
+    if (!result.ok || !result.file) {
+      setUploadingDoc(false);
+      setToast(result.error ?? "Gagal mengunggah modul.");
+      return;
+    }
+    const res = await setCourseModuleDoc(courseId, {
+      fileId: result.file.fileId,
+      name: result.file.fileName,
+      mime: result.file.mimeType,
+    });
+    setUploadingDoc(false);
+    if (!res.ok) {
+      setToast(res.error ?? "Gagal menyimpan modul.");
+      return;
+    }
+    setModuleDoc({ fileId: result.file.fileId, name: result.file.fileName, mime: result.file.mimeType });
+    setToast("Modul berhasil diunggah. Hanya guru yang bisa melihat modul ini.");
   }
 
-  async function removeBlock(id: string) {
-    const next = blocks.filter((item) => item.id !== id);
-    setBlocks(next);
-    await saveToDb(modules, next);
-    setToast("Blok dihapus dari pembelajaran.");
+  async function removeModuleDoc() {
+    if (!courseId || !moduleDoc) return;
+    if (!window.confirm("Hapus modul ini?")) return;
+    const res = await removeCourseModuleDoc(courseId);
+    if (!res.ok) {
+      setToast(res.error ?? "Gagal menghapus modul.");
+      return;
+    }
+    setModuleDoc(null);
+    setToast("Modul dihapus.");
   }
 
-  const blockById = useMemo(() => new Map(blocks.map((block) => [block.id, block])), [blocks]);
+  const totalBlocks = useMemo(() => modules.reduce((sum, module) => sum + module.lessons.length, 0), [modules]);
 
   if (loading) {
     return (
@@ -472,7 +563,7 @@ export default function CourseBuilderPage() {
                 <ArrowLeft size={14} /> Kembali ke dashboard
               </Link>
               <h1>Course builder</h1>
-              <p>Menyinkronkan modul dan materi dari database...</p>
+              <p>Memuat pembelajaran...</p>
             </div>
           </div>
         </div>
@@ -520,35 +611,35 @@ export default function CourseBuilderPage() {
               <ArrowLeft size={14} /> Kembali ke dashboard
             </Link>
             <h1>Course builder</h1>
-            <p>Isi materi per modul, lalu preview langsung sebagai siswa.</p>
+            <p>Semua perubahan tersimpan otomatis di draft. Siswa baru melihatnya setelah Publish.</p>
           </div>
         </div>
         <div className="builder-header__actions">
           <button className="button button--ghost button--small" onClick={openAddModule}>
-            <Plus size={15} /> Tambah modul
+            <Plus size={15} /> Tambah pertemuan
           </button>
           <Link href={`/learn/${slug}`} className="button button--ghost button--small">
             <Eye size={15} /> Preview siswa
           </Link>
-          <button className="button button--primary button--small" onClick={togglePublish}>
-            {state === "published" ? (
-              <>
-                <Save size={15} /> Simpan perubahan
-              </>
-            ) : (
-              <>
-                <Check size={15} /> Publish
-              </>
-            )}
+          <button className="button button--ghost button--small" onClick={() => saveNow(false)} disabled={saving}>
+            {saving ? <Loader2 size={14} className="spin" /> : <Save size={15} />} Simpan Draft
+          </button>
+          <button className="button button--primary button--small" onClick={publish} disabled={saving}>
+            <Check size={15} /> Publish
           </button>
         </div>
       </div>
 
-      {syncing && (
-        <div className="sync-banner">
-          <Loader2 size={16} className="spin" /> Menyimpan ke database...
-        </div>
-      )}
+      <div className="sync-banner" style={{ background: saveError ? "rgba(239, 68, 68, .12)" : hasDraftChanges ? "rgba(250, 204, 21, .12)" : "rgba(16, 185, 129, .12)" }}>
+        {saving ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
+        {saving
+          ? "Menyimpan draft..."
+          : saveError
+            ? `${saveError} Tekan Simpan Draft untuk mencoba lagi.`
+            : hasDraftChanges
+              ? `Draft tersimpan${savedAt ? ` pukul ${savedAt}` : ""}. Siswa masih melihat versi terbit sampai kamu menekan Publish.`
+              : `Tidak ada perubahan draft baru. Versi terbit${publishedAt ? ` sejak ${new Date(publishedAt).toLocaleString("id-ID")}` : " belum ada"}.`}
+      </div>
 
       <div className="builder-layout">
         <div className="builder-main">
@@ -558,31 +649,62 @@ export default function CourseBuilderPage() {
                 <strong>Info pembelajaran</strong>
                 <small>Identitas yang dilihat siswa saat membuka link.</small>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <StatusPill tone={state === "published" ? "teal" : "yellow"}>{state === "published" ? "Published" : "Draft"}</StatusPill>
-                <button className="button button--ghost button--small" onClick={saveMeta} disabled={metaSaving}>
-                  {metaSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Simpan info
-                </button>
-              </div>
+              <StatusPill tone={state === "published" ? "teal" : "yellow"}>{state === "published" ? "Published" : "Draft"}</StatusPill>
             </div>
             <div className="form-grid">
               <div className="field field--full">
                 <label>Judul pembelajaran</label>
-                <input value={meta.title} onChange={(event) => setMeta((current) => ({ ...current, title: event.target.value }))} />
+                <input value={meta.title} onChange={(event) => commit({ meta: { ...meta, title: event.target.value } })} />
               </div>
               <div className="field field--full">
                 <label>Deskripsi</label>
-                <textarea value={meta.description} onChange={(event) => setMeta((current) => ({ ...current, description: event.target.value }))} />
+                <textarea value={meta.description} onChange={(event) => commit({ meta: { ...meta, description: event.target.value } })} />
               </div>
               <div className="field">
                 <label>Mata pelajaran</label>
-                <input value={meta.subject} onChange={(event) => setMeta((current) => ({ ...current, subject: event.target.value }))} />
+                <input value={meta.subject} onChange={(event) => commit({ meta: { ...meta, subject: event.target.value } })} />
               </div>
               <div className="field">
                 <label>Target kelas</label>
-                <input value={meta.grade} onChange={(event) => setMeta((current) => ({ ...current, grade: event.target.value }))} />
+                <input value={meta.grade} onChange={(event) => commit({ meta: { ...meta, grade: event.target.value } })} />
+              </div>
+              <div className="field field--full">
+                <label>Durasi pembelajaran</label>
+                <input value={meta.duration} onChange={(event) => commit({ meta: { ...meta, duration: event.target.value } })} />
               </div>
             </div>
+
+            <div className="access-divider" />
+            <div className="builder-card__head" style={{ marginTop: 12 }}>
+              <div>
+                <strong>Modul pembelajaran · khusus guru</strong>
+                <small>Unggah modul ajar (PDF, PPT, atau DOCX). Bagian ini tidak terlihat siswa.</small>
+              </div>
+              <FileText size={18} color="var(--violet)" />
+            </div>
+            {moduleDoc ? (
+              <div className="file-chip-row" style={{ marginTop: 10 }}>
+                <span className="file-chip">
+                  <FileText size={14} /> {moduleDoc.name} · {fileKindLabel(moduleDoc.mime, moduleDoc.name)}
+                </span>
+                <a href={`/api/files/${moduleDoc.fileId}`} target="_blank" rel="noreferrer" className="button button--primary button--small">
+                  <Eye size={14} /> Lihat Modul
+                </a>
+                <label className="button button--ghost button--small" style={{ cursor: "pointer" }}>
+                  <Upload size={14} /> Ganti
+                  <input type="file" accept={MATERIAL_ACCEPT} onChange={handleModuleDocUpload} hidden disabled={uploadingDoc} />
+                </label>
+                <button className="button button--ghost button--small" onClick={removeModuleDoc}>
+                  <Trash2 size={13} /> Hapus
+                </button>
+              </div>
+            ) : (
+              <label className="file-upload-zone" style={{ marginTop: 10 }}>
+                <input type="file" accept={MATERIAL_ACCEPT} onChange={handleModuleDocUpload} disabled={uploadingDoc} />
+                {uploadingDoc ? <Loader2 size={16} className="spin" /> : <Upload size={16} />}
+                <span>{uploadingDoc ? "Mengunggah modul..." : "Unggah modul (PDF, PPT, DOCX)"}</span>
+              </label>
+            )}
           </div>
 
           {modules.length === 0 ? (
@@ -590,10 +712,10 @@ export default function CourseBuilderPage() {
               <span className="empty-state__icon">
                 <Plus size={22} />
               </span>
-              <strong>Belum ada modul</strong>
-              <p>Tambahkan modul pertama, lalu isi materi, PDF, link, kuis, atau game di dalamnya.</p>
+              <strong>Belum ada pertemuan</strong>
+              <p>Tambahkan pertemuan pertama, lalu isi materi, lembar kerja, kuis, atau game di dalamnya.</p>
               <button className="button button--primary button--small" onClick={openAddModule}>
-                <Plus size={15} /> Tambah modul pertama
+                <Plus size={15} /> Tambah pertemuan pertama
               </button>
             </div>
           ) : (
@@ -601,25 +723,62 @@ export default function CourseBuilderPage() {
               <div className={`builder-card module-builder-card module-builder-card--${module.accent}`} key={module.id}>
                 <div className="builder-card__head">
                   <div>
-                    <span className="eyebrow">{module.eyebrow || `MODUL ${String(moduleIndex + 1).padStart(2, "0")}`}</span>
+                    <span className="eyebrow">{module.eyebrow || `PERTEMUAN ${String(moduleIndex + 1).padStart(2, "0")}`}</span>
                     <strong style={{ margin: "2px 0" }}>{module.title}</strong>
-                    <small style={{ display: "block", marginTop: 2 }}>{module.duration || "10 menit"} · Buka untuk mengisi materi.</small>
+                    <small style={{ display: "block", marginTop: 2 }}>
+                      {module.duration || "10 menit"} · {module.lessons.length} materi
+                    </small>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button className="button button--ghost button--small" onClick={() => setForumModule(module)}>
-                      <MessageCircle size={14} /> Buka forum diskusi
+                      <MessageCircle size={14} /> Forum
                     </button>
-                    <button className="button button--ghost button--small" onClick={() => openEditModule(module)}>
-                      <Pencil size={14} /> Edit modul
+                    <button
+                      className="button button--ghost button--small"
+                      onClick={() => setEditingModuleId(editingModuleId === module.id ? null : module.id)}
+                    >
+                      <Pencil size={14} /> Edit pertemuan
                     </button>
                     <button className="button button--ghost button--small" onClick={() => setShowAdd(showAdd === module.id ? null : module.id)}>
                       <Plus size={15} /> Tambah materi
                     </button>
-                    <button className="icon-button icon-button--tiny" onClick={() => removeModule(module.id)} aria-label={`Hapus modul ${module.title}`}>
+                    <button className="icon-button icon-button--tiny" onClick={() => removeModule(module.id)} aria-label={`Hapus pertemuan ${module.title}`}>
                       <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
+
+                {editingModuleId === module.id && (
+                  <div className="form-grid" style={{ marginTop: 14, padding: 14, background: "var(--surface-2)", borderRadius: 14 }}>
+                    <div className="field field--full">
+                      <label>Judul pertemuan</label>
+                      <input value={module.title} onChange={(event) => patchModule(module.id, { title: event.target.value })} />
+                    </div>
+                    <div className="field">
+                      <label>Label pertemuan</label>
+                      <input value={module.eyebrow} onChange={(event) => patchModule(module.id, { eyebrow: event.target.value })} />
+                    </div>
+                    <div className="field">
+                      <label>Estimasi durasi</label>
+                      <input value={module.duration ?? ""} onChange={(event) => patchModule(module.id, { duration: event.target.value })} />
+                    </div>
+                    <div className="field field--full">
+                      <label>Warna aksen</label>
+                      <select
+                        value={module.accent}
+                        onChange={(event) => patchModule(module.id, { accent: event.target.value as Module["accent"] })}
+                      >
+                        <option value="violet">Violet</option>
+                        <option value="teal">Teal</option>
+                        <option value="yellow">Kuning</option>
+                        <option value="coral">Coral</option>
+                      </select>
+                    </div>
+                    <div className="field field--full">
+                      <small className="field-helper">Perubahan tersimpan otomatis di draft — tidak ada tombol simpan/batal.</small>
+                    </div>
+                  </div>
+                )}
 
                 {showAdd === module.id && (
                   <div className="add-block-bar">
@@ -632,15 +791,12 @@ export default function CourseBuilderPage() {
                 )}
 
                 <div className="module-editor-list">
-                  {module.lessons
-                    .map((seedBlock) => blockById.get(seedBlock.id))
-                    .concat(blocks.filter((block) => block.moduleId === module.id && !module.lessons.some((lesson) => lesson.id === block.id)))
-                    .filter(Boolean)
-                    .map((block) => {
-                      const item = block as LessonBlock;
-                      const Icon = iconMap[item.type];
-                      return (
-                        <div className="content-block" key={item.id}>
+                  {module.lessons.map((item) => {
+                    const Icon = iconMap[item.type] ?? FileText;
+                    const isEditing = editingBlockId === item.id;
+                    return (
+                      <div key={item.id}>
+                        <div className="content-block">
                           <span className="content-block__icon">
                             <Icon size={17} />
                           </span>
@@ -649,26 +805,50 @@ export default function CourseBuilderPage() {
                             <small>{item.description}</small>
                             {item.material?.videoUrl && <em className="material-chip">Video terhubung</em>}
                             {item.material?.linkUrl && <em className="material-chip">Link terhubung</em>}
-                            {item.material?.text && <em className="material-chip">Teks siap tampil</em>}
-                            {item.material?.pdfUrl && <em className="material-chip">PDF: {item.material.fileName || "dokumen"}</em>}
+                            {item.material?.pdfUrl && (
+                              <em className="material-chip">
+                                Berkas: {item.material.fileName || "dokumen"} · {fileKindLabel(item.material.fileMime, item.material.fileName)}
+                              </em>
+                            )}
+                            {item.material?.worksheet?.enabled !== false && <em className="material-chip">Lembar kerja aktif</em>}
                           </div>
                           <small style={{ color: "var(--muted)", fontSize: ".64rem" }}>{item.duration}</small>
                           <div className="content-block__menu">
-                            <button className="icon-button icon-button--tiny" onClick={() => openEditor(item)} aria-label={`Edit materi ${item.title}`}>
-                              <FileText size={14} />
+                            <button
+                              className="icon-button icon-button--tiny"
+                              onClick={() =>
+                                item.type === "quiz" ? openQuizEditor(item, module.id) : setEditingBlockId(isEditing ? null : item.id)
+                              }
+                              aria-label={`Edit materi ${item.title}`}
+                            >
+                              <Pencil size={14} />
                             </button>
                             <button className="icon-button icon-button--tiny" onClick={() => removeBlock(item.id)} aria-label={`Hapus ${item.title}`}>
                               <Trash2 size={13} />
                             </button>
                           </div>
                         </div>
-                      );
-                    })}
+
+                        {isEditing && (
+                          <BlockEditor
+                            block={item}
+                            uploading={uploadingBlockId === item.id}
+                            onPatch={(patch) => patchBlock(item.id, patch)}
+                            onMaterial={(patch) => patchMaterial(item.id, patch)}
+                            onWorksheet={(patch) => updateWorksheet(item.id, item.material?.worksheet, patch)}
+                            onUpload={(event) => handleBlockUpload(item, event)}
+                            onRemoveFile={() => removeBlockFile(item)}
+                            onClose={() => setEditingBlockId(null)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                   {module.lessons.length === 0 && (
                     <div className="empty-state">
                       <FileText size={20} />
-                      <strong>Modul ini belum punya materi</strong>
-                      <p>Gunakan tombol Tambah materi untuk mengisi teks, PDF, link, kuis, atau game.</p>
+                      <strong>Pertemuan ini belum punya materi</strong>
+                      <p>Gunakan tombol Tambah materi untuk mengisi teks, berkas, kuis, aktivitas, atau game.</p>
                     </div>
                   )}
                 </div>
@@ -706,15 +886,24 @@ export default function CourseBuilderPage() {
           <div className="access-card">
             <div className="access-card__head">
               <div>
-                <strong>Materi siap tayang</strong>
-                <small>Guru dapat memasukkan YouTube, Drive, teks, link bebas, PDF, kuis, dan game.</small>
+                <strong>Status draft</strong>
+                <small>{totalBlocks} materi di {modules.length} pertemuan.</small>
               </div>
               <Sparkles size={18} color="var(--violet)" />
             </div>
             <div className="settings-row">
               <div className="settings-row__copy">
+                <strong>{hasDraftChanges ? "Ada draft belum terbit" : "Draft sama dengan versi terbit"}</strong>
+                <small>Perubahan tersimpan otomatis meski kamu menutup halaman.</small>
+              </div>
+              <button className="button button--primary button--small" onClick={publish} disabled={saving}>
+                Publish
+              </button>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row__copy">
                 <strong>Halaman siswa</strong>
-                <small>Setiap modul memiliki route dan forum sendiri.</small>
+                <small>Setiap pertemuan memiliki route dan forum sendiri.</small>
               </div>
               {modules[0] ? (
                 <Link href={`/learn/${slug}/modul/${modules[0].id}`} className="text-link">
@@ -722,7 +911,7 @@ export default function CourseBuilderPage() {
                 </Link>
               ) : (
                 <span className="text-link" style={{ opacity: 0.5 }}>
-                  Belum ada modul
+                  Belum ada pertemuan
                 </span>
               )}
             </div>
@@ -730,53 +919,71 @@ export default function CourseBuilderPage() {
         </aside>
       </div>
 
-      {moduleDraft && (
-        <div className="modal-backdrop" onClick={() => setModuleDraft(null)}>
+      {showDraftPrompt && (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="modal-card__head">
+              <div>
+                <div className="eyebrow">DRAFT BARU</div>
+                <h2>Buat draft baru?</h2>
+                <p>Perubahan akan disimpan sebagai draft dan belum terlihat siswa sampai kamu menekan Publish.</p>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="button button--ghost button--small" onClick={cancelDraft}>
+                Batal
+              </button>
+              <button className="button button--primary button--small" onClick={beginDraft}>
+                <Check size={14} /> Ya, buat draft
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {moduleDraftTarget && (
+        <div className="modal-backdrop" onClick={() => setModuleDraftTarget(null)}>
           <div className="modal-card" onClick={(event) => event.stopPropagation()}>
             <div className="modal-card__head">
               <div>
-                <div className="eyebrow">{editingModuleId ? "EDIT MODUL" : "MODUL BARU"}</div>
-                <h2>{editingModuleId ? "Rapikan judul dan durasi modul." : "Tambah modul ke pembelajaran."}</h2>
+                <div className="eyebrow">PERTEMUAN BARU</div>
+                <h2>Tambah pertemuan ke pembelajaran.</h2>
               </div>
-              <button className="icon-button" onClick={() => setModuleDraft(null)} aria-label="Tutup">
+              <button className="icon-button" onClick={() => setModuleDraftTarget(null)} aria-label="Tutup">
                 <X size={16} />
               </button>
             </div>
             <div className="form-grid" style={{ marginTop: 18 }}>
               <div className="field field--full">
-                <label>Judul modul</label>
+                <label>Judul pertemuan</label>
                 <input
                   autoFocus
-                  value={moduleDraft.title}
-                  onChange={(event) => setModuleDraft((current) => (current ? { ...current, title: event.target.value } : current))}
+                  value={moduleDraftTarget.title}
+                  onChange={(event) => setModuleDraftTarget({ ...moduleDraftTarget, title: event.target.value })}
                   placeholder="Contoh: Mengamati & Menanya"
                 />
               </div>
               <div className="field">
-                <label>Label modul</label>
+                <label>Label pertemuan</label>
                 <input
-                  value={moduleDraft.eyebrow}
-                  onChange={(event) => setModuleDraft((current) => (current ? { ...current, eyebrow: event.target.value } : current))}
-                  placeholder="Modul 05"
+                  value={moduleDraftTarget.eyebrow}
+                  onChange={(event) => setModuleDraftTarget({ ...moduleDraftTarget, eyebrow: event.target.value })}
+                  placeholder="Pertemuan 05"
                 />
               </div>
               <div className="field">
                 <label>Estimasi durasi</label>
                 <input
-                  value={moduleDraft.duration}
-                  onChange={(event) => setModuleDraft((current) => (current ? { ...current, duration: event.target.value } : current))}
+                  value={moduleDraftTarget.duration}
+                  onChange={(event) => setModuleDraftTarget({ ...moduleDraftTarget, duration: event.target.value })}
                   placeholder="10 menit"
                 />
               </div>
               <div className="field field--full">
                 <label>Warna aksen</label>
                 <select
-                  value={moduleDraft.accent}
-                  onChange={(event) =>
-                    setModuleDraft((current) =>
-                      current ? { ...current, accent: event.target.value as Module["accent"] } : current
-                    )
-                  }
+                  value={moduleDraftTarget.accent}
+                  onChange={(event) => setModuleDraftTarget({ ...moduleDraftTarget, accent: event.target.value as Module["accent"] })}
                 >
                   <option value="violet">Violet</option>
                   <option value="teal">Teal</option>
@@ -786,36 +993,15 @@ export default function CourseBuilderPage() {
               </div>
             </div>
             <div className="modal-actions">
-              <button className="button button--ghost button--small" onClick={() => setModuleDraft(null)}>
+              <button className="button button--ghost button--small" onClick={() => setModuleDraftTarget(null)}>
                 Batal
               </button>
-              <button className="button button--primary button--small" onClick={saveModule}>
-                <Save size={14} /> {editingModuleId ? "Simpan modul" : "Tambah modul"}
+              <button className="button button--primary button--small" onClick={saveModuleDraft}>
+                <Plus size={14} /> Tambah pertemuan
               </button>
             </div>
           </div>
         </div>
-      )}
-
-      {editingBlock && (
-        <BlockEditor
-          block={editingBlock}
-          title={editTitle}
-          description={editDescription}
-          material={material}
-          uploading={uploading}
-          linkTitle={linkTitle}
-          linkDescription={linkDescription}
-          setTitle={setEditTitle}
-          setDescription={setEditDescription}
-          setMaterial={setMaterial}
-          setLinkTitle={setLinkTitle}
-          setLinkDescription={setLinkDescription}
-          onPdfUpload={handlePdfUpload}
-          onRemovePdf={removePdf}
-          onClose={() => setEditingBlock(null)}
-          onSave={saveBlockEdit}
-        />
       )}
 
       {forumModule && (
@@ -824,8 +1010,8 @@ export default function CourseBuilderPage() {
             <div className="modal-card__head">
               <div>
                 <div className="eyebrow">FORUM GURU · {forumModule.title.toUpperCase()}</div>
-                <h2>Diskusi modul ini.</h2>
-                <p>Guru dapat menghapus semua pertanyaan dan tanggapan di forum modul ini.</p>
+                <h2>Diskusi pertemuan ini.</h2>
+                <p>Guru dapat menghapus semua pertanyaan dan tanggapan di forum pertemuan ini.</p>
               </div>
               <button className="icon-button" onClick={() => setForumModule(null)} aria-label="Tutup forum">
                 <X size={16} />
@@ -847,397 +1033,197 @@ export default function CourseBuilderPage() {
   );
 }
 
+/** Editor materi inline — semua ketikan langsung masuk draft, tanpa tombol simpan/batal. */
 function BlockEditor({
   block,
-  title,
-  description,
-  material,
   uploading,
-  linkTitle,
-  linkDescription,
-  setTitle,
-  setDescription,
-  setMaterial,
-  setLinkTitle,
-  setLinkDescription,
-  onPdfUpload,
-  onRemovePdf,
+  onPatch,
+  onMaterial,
+  onWorksheet,
+  onUpload,
+  onRemoveFile,
   onClose,
-  onSave,
 }: {
   block: LessonBlock;
-  title: string;
-  description: string;
-  material: MaterialDraft;
   uploading: boolean;
-  linkTitle: string;
-  linkDescription: string;
-  setTitle: (value: string) => void;
-  setDescription: (value: string) => void;
-  setMaterial: React.Dispatch<React.SetStateAction<MaterialDraft>>;
-  setLinkTitle: (value: string) => void;
-  setLinkDescription: (value: string) => void;
-  onPdfUpload: (event: ChangeEvent<HTMLInputElement>) => void;
-  onRemovePdf: () => void;
+  onPatch: (patch: Partial<LessonBlock>) => void;
+  onMaterial: (patch: Record<string, unknown>) => void;
+  onWorksheet: (patch: Partial<WorksheetConfig>) => void;
+  onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+  onRemoveFile: () => void;
   onClose: () => void;
-  onSave: () => void;
 }) {
-  const updateActivity = <K extends keyof ActivityConfig>(key: K, value: ActivityConfig[K]) =>
-    setMaterial((current) => ({ ...current, activity: { ...current.activity, [key]: value } }));
-  const updateGame = <K extends keyof GameBlockConfig>(key: K, value: GameBlockConfig[K]) =>
-    setMaterial((current) => ({ ...current, game: { ...current.game, [key]: value } }));
+  const material = block.material ?? {};
+  const worksheet: WorksheetConfig = { ...blankWorksheet, ...(material.worksheet ?? {}) };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card material-editor-modal" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-card__head">
-          <div>
-            <div className="eyebrow">EDITOR MATERI · {block.type.toUpperCase()}</div>
-            <h2>Rincian yang dilihat siswa.</h2>
-          </div>
-          <button className="icon-button" onClick={onClose} aria-label="Tutup editor">
-            <X size={16} />
-          </button>
+    <div className="activity-lesson-card" style={{ marginTop: 10, padding: 16, background: "var(--surface-2)", borderRadius: 14 }}>
+      <div className="builder-card__head" style={{ marginBottom: 10 }}>
+        <div>
+          <div className="eyebrow">EDITOR MATERI · {block.type.toUpperCase()}</div>
+          <small>Tersimpan otomatis di draft. Tidak perlu tombol simpan.</small>
+        </div>
+        <button className="icon-button icon-button--tiny" onClick={onClose} aria-label="Tutup editor">
+          <X size={14} />
+        </button>
+      </div>
+
+      <div className="form-grid">
+        <div className="field field--full">
+          <label>Judul materi</label>
+          <input value={block.title} onChange={(event) => onPatch({ title: event.target.value })} />
+        </div>
+        <div className="field field--full">
+          <label>Deskripsi</label>
+          <textarea value={block.description} onChange={(event) => onPatch({ description: event.target.value })} />
+        </div>
+        <div className="field">
+          <label>Estimasi durasi</label>
+          <input value={block.duration} onChange={(event) => onPatch({ duration: event.target.value })} />
         </div>
 
-        <div className="form-grid" style={{ marginTop: 20 }}>
+        {(block.type === "text" || block.type === "assignment" || block.type === "reflection") && (
           <div className="field field--full">
-            <label>Judul blok</label>
-            <input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} />
+            <label>Isi materi / instruksi</label>
+            <textarea
+              className="material-textarea"
+              value={material.text ?? ""}
+              onChange={(event) => onMaterial({ text: event.target.value })}
+              placeholder="Tulis materi atau instruksi yang akan muncul di halaman siswa..."
+            />
           </div>
-          <div className="field field--full">
-            <label>Deskripsi singkat</label>
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
-          </div>
+        )}
 
-          {(block.type === "text" || block.type === "assignment" || block.type === "reflection") && (
+        {block.type === "video" && (
+          <>
             <div className="field field--full">
-              <label>Isi teks / instruksi</label>
+              <label>Link YouTube</label>
+              <input value={material.videoUrl ?? ""} onChange={(event) => onMaterial({ videoUrl: event.target.value })} placeholder="https://www.youtube.com/watch?v=..." />
+            </div>
+            <div className="field field--full">
+              <label>Link Google Drive (opsional)</label>
+              <input value={material.driveUrl ?? ""} onChange={(event) => onMaterial({ driveUrl: event.target.value })} placeholder="https://drive.google.com/file/d/.../view" />
+            </div>
+          </>
+        )}
+
+        {block.type === "link" && (
+          <>
+            <div className="field field--full">
+              <label>Judul link</label>
+              <input value={material.linkTitle ?? ""} onChange={(event) => onMaterial({ linkTitle: event.target.value })} placeholder="Judul sumber belajar" />
+            </div>
+            <div className="field field--full">
+              <label>URL / link yang dibuka siswa</label>
+              <input value={material.linkUrl ?? ""} onChange={(event) => onMaterial({ linkUrl: event.target.value })} placeholder="https://contoh.com/sumber-belajar" />
+            </div>
+          </>
+        )}
+
+        {block.type === "activity" && (
+          <div className="field field--full">
+            <label>Pilih visual interaktif</label>
+            <select
+              value={material.activity?.visualId ?? "number-line-lab"}
+              onChange={(event) => onMaterial({ activity: { visualId: event.target.value as GameTemplateId } })}
+            >
+              {gameTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.title}
+                </option>
+              ))}
+            </select>
+            <small className="field-helper">Siswa membuka visual dengan tombol Buka Visual / Tutup Visual.</small>
+          </div>
+        )}
+
+        {block.type === "game" && (
+          <>
+            <div className="field field--full">
+              <label>Game dari library</label>
+              <select
+                value={material.game?.gameId ?? "number-line-challenge"}
+                onChange={(event) => onMaterial({ game: { ...blankGame, ...(material.game ?? {}), gameId: event.target.value as GameBlockConfig["gameId"] } })}
+              >
+                {gameTemplates.map((game) => (
+                  <option key={game.id} value={game.id}>
+                    {game.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field field--full">
+              <label>Instruksi game</label>
               <textarea
-                className="material-textarea"
-                value={material.text}
-                onChange={(event) => setMaterial((current) => ({ ...current, text: event.target.value }))}
-                placeholder="Tulis materi atau instruksi tugas yang akan muncul di halaman siswa..."
+                value={material.game?.instructions ?? ""}
+                onChange={(event) => onMaterial({ game: { ...blankGame, ...(material.game ?? {}), instructions: event.target.value } })}
               />
             </div>
-          )}
+          </>
+        )}
 
-          {block.type === "video" && (
-            <>
-              <div className="field field--full">
-                <label>Link YouTube</label>
-                <input
-                  value={material.videoUrl}
-                  onChange={(event) => setMaterial((current) => ({ ...current, videoUrl: event.target.value }))}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                />
-              </div>
-              <div className="field field--full">
-                <label>Link Google Drive (opsional)</label>
-                <input
-                  value={material.driveUrl}
-                  onChange={(event) => setMaterial((current) => ({ ...current, driveUrl: event.target.value }))}
-                  placeholder="https://drive.google.com/file/d/.../view"
-                />
-              </div>
-            </>
-          )}
-
-          {block.type === "link" && (
-            <>
-              <div className="field field--full">
-                <label>Judul link</label>
-                <input
-                  value={linkTitle}
-                  onChange={(event) => setLinkTitle(event.target.value)}
-                  placeholder="Judul sumber belajar"
-                />
-              </div>
-              <div className="field field--full">
-                <label>Deskripsi singkat</label>
-                <textarea
-                  value={linkDescription}
-                  onChange={(event) => setLinkDescription(event.target.value)}
-                  placeholder="Keterangan singkat tentang sumber belajar ini"
-                  rows={2}
-                />
-              </div>
-              <div className="field field--full">
-                <label>URL / link yang ingin dibuka siswa</label>
-                <input
-                  value={material.linkUrl}
-                  onChange={(event) => setMaterial((current) => ({ ...current, linkUrl: event.target.value }))}
-                  placeholder="https://contoh.com/sumber-belajar"
-                />
-                <small className="field-helper">
-                  Link bisa berupa website, video YouTube, atau sumber belajar lain yang bisa dibuka.
-                </small>
-              </div>
-            </>
-          )}
-
-          {block.type === "assignment" && (
-            <>
-              <div className="field field--full">
-                <label>Link PDF / Drive (opsional)</label>
-                <input
-                  value={material.pdfUrl.startsWith("/api/files/") ? "" : material.pdfUrl}
-                  onChange={(event) =>
-                    setMaterial((current) => ({
-                      ...current,
-                      pdfUrl: event.target.value,
-                      pdfFileId: "",
-                      fileName: "",
-                      fileMime: "",
-                    }))
-                  }
-                  placeholder="https://drive.google.com/file/d/.../view atau URL PDF"
-                />
-              </div>
-              <div className="field field--full">
-                <label>Atau upload PDF dari perangkat</label>
-                <input type="file" accept="application/pdf" onChange={onPdfUpload} disabled={uploading} />
-                <small className="field-helper">
-                  {uploading
-                    ? "Mengunggah PDF ke database..."
-                    : material.pdfFileId
-                      ? `Tersimpan: ${material.fileName || "PDF"}`
-                      : "PDF disimpan di database sehingga bisa dibuka lagi dan dihapus."}
-                </small>
-              </div>
-              {material.pdfUrl && (
-                <div className="field field--full">
-                  <div className="file-chip-row">
-                    <a href={material.pdfUrl} target="_blank" rel="noreferrer" className="file-chip">
-                      <FileText size={14} /> {material.fileName || "Buka PDF"}
-                    </a>
-                    <button type="button" className="button button--ghost button--small" onClick={onRemovePdf}>
-                      <Trash2 size={13} /> Hapus PDF
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {block.type === "activity" && (
-            <>
-              <div className="field field--full">
-                <label>Contoh aktivitas FPBL</label>
-                <select
-                  value={material.activity.templateId}
-                  onChange={(event) => {
-                    const template = activityTemplates.find((item) => item.id === event.target.value) || activityTemplates[0];
-                    setMaterial((current) => ({
-                      ...current,
-                      activity: {
-                        ...current.activity,
-                        templateId: template.id,
-                        prompt: template.prompt,
-                        evidenceLabel: template.evidenceLabel,
-                        responseType: template.responseType,
-                        choices:
-                          template.responseType === "interactive"
-                            ? [
-                                { label: "A", value: "−8", correct: true },
-                                { label: "B", value: "0" },
-                                { label: "C", value: "8" },
-                              ]
-                            : current.activity.choices,
-                        instructions: `Kerjakan aktivitas: ${template.title}. Tulis proses berpikirmu dengan runtut.`,
-                      },
-                    }));
-                  }}
-                >
-                  {activityTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.title}
-                    </option>
-                  ))}
-                </select>
-                <small className="field-helper">
-                  Aktivitas ini berdiri sendiri dan bukan mini-game. Garis Bilangan dan Kartu Muatan tersedia di tipe Game.
-                </small>
-              </div>
-              <div className="field field--full">
-                <label>Pertanyaan / kasus aktivitas</label>
-                <textarea className="material-textarea" value={material.activity.prompt} onChange={(event) => updateActivity("prompt", event.target.value)} />
-              </div>
-              <div className="field field--full">
-                <label>Instruksi aktivitas</label>
-                <textarea
-                  className="material-textarea"
-                  value={material.activity.instructions}
-                  onChange={(event) => updateActivity("instructions", event.target.value)}
-                />
-              </div>
-              <div className="field field--full">
-                <label>Bukti yang dikumpulkan</label>
-                <input value={material.activity.evidenceLabel} onChange={(event) => updateActivity("evidenceLabel", event.target.value)} />
-              </div>
-              <div className="field">
-                <label>Jenis respons siswa</label>
-                <select
-                  value={material.activity.responseType}
-                  onChange={(event) => updateActivity("responseType", event.target.value as ActivityConfig["responseType"])}
-                >
-                  <option value="interactive">Interaktif / simulasi</option>
-                  <option value="short-answer">Jawaban singkat</option>
-                  <option value="essay">Uraian</option>
-                  <option value="upload">Upload bukti</option>
-                </select>
-              </div>
-              {material.activity.responseType === "interactive" && (
-                <div className="field field--full">
-                  <label>Pilihan jawaban dan kunci</label>
-                  <div className="choice-editor">
-                    {(material.activity.choices || []).map((choice, index) => (
-                      <div className="choice-editor__row" key={choice.label}>
-                        <strong>{choice.label}</strong>
-                        <input
-                          value={choice.value}
-                          onChange={(event) =>
-                            setMaterial((current) => ({
-                              ...current,
-                              activity: {
-                                ...current.activity,
-                                choices: (current.activity.choices || []).map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, value: event.target.value } : item
-                                ),
-                              },
-                            }))
-                          }
-                        />
-                        <label className="choice-editor__check">
-                          <input
-                            type="radio"
-                            name="activity-correct"
-                            checked={Boolean(choice.correct)}
-                            onChange={() =>
-                              setMaterial((current) => ({
-                                ...current,
-                                activity: {
-                                  ...current.activity,
-                                  choices: (current.activity.choices || []).map((item, itemIndex) => ({
-                                    ...item,
-                                    correct: itemIndex === index,
-                                  })),
-                                },
-                              }))
-                            }
-                          />{" "}
-                          benar
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  <small className="field-helper">Siswa memilih satu jawaban lalu menekan Kirim jawaban.</small>
-                </div>
-              )}
-              <div className="field">
-                <label>Poin aktivitas</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={material.activity.points}
-                  onChange={(event) => updateActivity("points", Number(event.target.value))}
-                />
-              </div>
-              <div className="field field--full">
-                <label>Rubrik penilaian / catatan guru</label>
-                <textarea value={material.activity.rubric} onChange={(event) => updateActivity("rubric", event.target.value)} />
-              </div>
-              <div className="settings-row field--full">
-                <div className="settings-row__copy">
-                  <strong>Masuk ke gradebook</strong>
-                  <small>Nilai aktivitas ikut analitik peserta.</small>
-                </div>
-                <button className={`toggle ${material.activity.graded ? "is-on" : ""}`} onClick={() => updateActivity("graded", !material.activity.graded)}>
-                  <span />
-                </button>
-              </div>
-              <div className="settings-row field--full">
-                <div className="settings-row__copy">
-                  <strong>Tampilkan skor ke siswa</strong>
-                  <small>Siswa melihat poin setelah mengirim respons.</small>
-                </div>
-                <button className={`toggle ${material.activity.showScore ? "is-on" : ""}`} onClick={() => updateActivity("showScore", !material.activity.showScore)}>
-                  <span />
-                </button>
-              </div>
-            </>
-          )}
-
-          {block.type === "game" && (
-            <>
-              <div className="field field--full">
-                <label>Game dari library</label>
-                <select value={material.game.gameId} onChange={(event) => updateGame("gameId", event.target.value as GameBlockConfig["gameId"])}>
-                  {gameTemplates.map((game) => (
-                    <option key={game.id} value={game.id}>
-                      {game.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field field--full">
-                <label>Instruksi game</label>
-                <textarea value={material.game.instructions} onChange={(event) => updateGame("instructions", event.target.value)} />
-              </div>
-              <div className="field">
-                <label>Poin per sesi</label>
-                <input type="number" min={0} value={material.game.points} onChange={(event) => updateGame("points", Number(event.target.value))} />
-              </div>
-              <div className="field">
-                <label>Ambang lulus (%)</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={material.game.passThreshold}
-                  onChange={(event) => updateGame("passThreshold", Number(event.target.value))}
-                />
-              </div>
-              <div className="settings-row field--full">
-                <div className="settings-row__copy">
-                  <strong>Masuk ke gradebook</strong>
-                  <small>Playtest guru tetap tidak dihitung; sesi siswa dapat dinilai.</small>
-                </div>
-                <button className={`toggle ${material.game.graded ? "is-on" : ""}`} onClick={() => updateGame("graded", !material.game.graded)}>
-                  <span />
-                </button>
-              </div>
-              <div className="settings-row field--full">
-                <div className="settings-row__copy">
-                  <strong>Tampilkan skor ke siswa</strong>
-                  <small>Atur apakah skor dan ambang lulus terlihat.</small>
-                </div>
-                <button className={`toggle ${material.game.showScore ? "is-on" : ""}`} onClick={() => updateGame("showScore", !material.game.showScore)}>
-                  <span />
-                </button>
-              </div>
-            </>
-          )}
-
-          {block.type === "quiz" && (
+        {block.type === "quiz" && (
+          <div className="field field--full">
             <div className="material-callout">
               <ClipboardCheck size={18} />
               <div>
-                <strong>Kuis dikelola di halaman builder khusus</strong>
-                <small>Tambah soal, kunci jawaban, pembahasan, poin, percobaan, dan pengaturan tampilan skor.</small>
+                <strong>Soal kuis dikelola di halaman builder kuis</strong>
+                <small>Klik ikon pensil pada materi kuis untuk mengatur soal, kunci, dan aturan skor.</small>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Berkas materi untuk semua tipe: PDF, PPT, DOCX, atau gambar. */}
+        <div className="field field--full">
+          <label>Berkas materi (PDF, PPT, DOCX, atau gambar)</label>
+          <label className="file-upload-zone">
+            <input type="file" accept={MATERIAL_ACCEPT} onChange={onUpload} disabled={uploading} />
+            {uploading ? <Loader2 size={16} className="spin" /> : <Upload size={16} />}
+            <span>{uploading ? "Mengunggah..." : "Pilih berkas dari perangkat"}</span>
+          </label>
+          {material.pdfUrl ? (
+            <div className="file-chip-row" style={{ marginTop: 8 }}>
+              <a href={material.pdfUrl} target="_blank" rel="noreferrer" className="file-chip">
+                <FileText size={14} /> {material.fileName || "Berkas materi"} · {fileKindLabel(material.fileMime, material.fileName)}
+              </a>
+              <button type="button" className="button button--ghost button--small" onClick={onRemoveFile}>
+                <Trash2 size={13} /> Hapus
+              </button>
+            </div>
+          ) : (
+            <small className="field-helper">PDF pratinjau langsung; PPT/DOCX bisa diunduh siswa.</small>
           )}
         </div>
 
-        <div className="modal-actions">
-          <button className="button button--ghost button--small" onClick={onClose}>
-            Batal
-          </button>
-          <button className="button button--primary button--small" onClick={onSave} disabled={uploading}>
-            <Save size={14} /> Simpan rincian
-          </button>
+        {/* Lembar kerja, jawaban & lampiran — sama untuk semua tipe materi. */}
+        <div className="field field--full">
+          <div className="settings-row">
+            <div className="settings-row__copy">
+              <strong>Lembar kerja, jawaban &amp; lampiran</strong>
+              <small>Satu format untuk semua materi. Siswa menjawab dan melampirkan berkas.</small>
+            </div>
+            <button className={`toggle ${worksheet.enabled ? "is-on" : ""}`} onClick={() => onWorksheet({ enabled: !worksheet.enabled })}>
+              <span />
+            </button>
+          </div>
         </div>
+        {worksheet.enabled && (
+          <>
+            <div className="field field--full">
+              <label>Instruksi lembar kerja</label>
+              <textarea value={worksheet.prompt} onChange={(event) => onWorksheet({ prompt: event.target.value })} />
+            </div>
+            <div className="field">
+              <label>Label kolom jawaban</label>
+              <input value={worksheet.answerLabel} onChange={(event) => onWorksheet({ answerLabel: event.target.value })} />
+            </div>
+            <div className="field">
+              <label>Label kolom lampiran</label>
+              <input value={worksheet.attachmentLabel} onChange={(event) => onWorksheet({ attachmentLabel: event.target.value })} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

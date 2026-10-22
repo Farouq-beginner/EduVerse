@@ -20,52 +20,60 @@ memilih kelas, mis. VII-B). Untuk coba cepat, gunakan tombol demo **Siswa: Alya 
 ## 3. Katalog Pembelajaran (`/pilih-pembelajaran`)
 
 - Daftar semua pembelajaran berstatus **Published** dari semua guru (dari database).
+- Setiap kartu menampilkan jumlah **pertemuan**.
 - Klik salah satu untuk masuk ke ruang belajar tersebut.
 
 ## 4. Halaman Pembelajaran (`/learn/[slug]`)
 
-- Menampilkan identitas course, daftar modul, dan **progres belajar** (persentase blok yang
-  selesai) yang dihitung dari database.
+- Menampilkan identitas course, daftar **pertemuan**, dan **progres belajar** (persentase blok
+  yang selesai) yang dihitung dari database.
 - **Jika belum bergabung**: siswa harus bergabung dulu (untuk course dengan akses terkunci,
   muncul kartu "akses terkunci" dan siswa baru ditolak sesuai pengaturan guru).
 - Progres yang sempat tersimpan lokal (saat belum login/bergabung) otomatis **disinkronkan ke
   database** saat enrollment terdeteksi, jadi tidak hilang.
-- Klik modul untuk masuk ke halaman belajar modul tersebut.
+- Klik **Buka pertemuan** untuk masuk ke halaman belajar pertemuan tersebut.
+- Materi yang tampil adalah versi yang sudah **dipublikasikan guru** — draft guru tidak terlihat.
 
-## 5. Halaman Modul (`/learn/[slug]/modul/[moduleId]`)
+## 5. Halaman Pertemuan (`/learn/[slug]/modul/[moduleId]`)
 
 Inti dari pengalaman belajar. Di dalamnya ada daftar blok materi; blok yang sudah selesai
 ditandai centang. Jenis blok dan cara mengerjakannya:
 
 ### Materi Teks / Video / Link
-- **Teks**: dibaca langsung, lalu klik **Selesai** → progres bertambah.
+- **Teks**: dibaca langsung di halaman.
 - **Video**: player YouTube (opsional link Drive pendukung).
 - **Link**: kartu sumber belajar dengan judul dan deskripsi → membuka URL di tab baru.
-- **PDF**: tombol membuka **PDF viewer popup** tanpa meninggalkan halaman.
+- **Berkas materi**: PDF tampil di **PDF viewer** dalam halaman; PPT/DOCX/gambar punya tombol
+  **Lihat** dan **Unduh**.
 
-### Aktivitas
-- Sesuai konfigurasi guru: pilihan ganda interaktif, jawaban singkat, uraian, atau **upload
-  bukti** (file diunggah ke `/api/files` dan tersimpan di database).
-- Jawaban dikirim ke guru untuk ditinjau; poin/umpan balik tampil bila diaktifkan guru.
+### Aktivitas (Visual Interaktif)
+- Guru memilih mini-game sebagai visual: garis bilangan, kartu muatan, tantangan, atau
+  laboratorium garis bilangan.
+- Siswa menekan **Buka Visual** untuk menampilkan visual interaktif, dan **Tutup Visual**
+  untuk menyembunyikannya kembali.
+- Setelah mencoba, siswa mengisi lembar kerja di bawahnya.
+
+### Lembar Kerja · Jawaban & Lampiran
+- **Semua tipe materi** punya lembar kerja yang sama: instruksi dari guru, kolom **jawaban**
+  (ditulis), dan kolom **lampiran**.
+- Lampiran menerima **foto, PDF, PPT/PPTX, atau DOC/DOCX** dan tersimpan di database.
+- Klik **Kirim jawaban & lampiran** → jawaban tersimpan, materi ditandai selesai, dan guru bisa
+  membuka jawaban serta lampirannya.
+- Saat halaman dibuka lagi, jawaban dan lampiran **otomatis dimuat ulang** (tidak hilang
+  setelah refresh).
 
 ### Kuis (`QUIZ`)
-- Siswa mengerjakan soal pilihan jawaban sesuai jumlah attempt yang diberikan guru.
+- Siswa mengerjakan soal sesuai jumlah attempt yang diberikan guru.
 - Skor langsung dihitung dan ditampilkan (jika guru mengaktifkan tampilan skor).
-- Attempt dan nilai tersimpan di database — bisa dilanjutkan/dilihat kembali saat login lagi.
-- Tampilan **empty state** bila kuis belum memiliki soal.
-
-### Tugas (PDF / Assignment)
-- Siswa menulis jawaban dan/atau **mengunggah lampiran** (PDF/gambar) lewat `/api/files`.
-- Jawaban tersimpan di database; saat halaman dibuka lagi, teks dan lampiran **otomatis
-  dimuat ulang** (tidak hilang setelah refresh).
-- Status penilaian guru (`score`, `status`) ikut tampil pada jawaban yang sudah dinilai.
+- Attempt dan nilai tersimpan di database — bisa dilihat kembali saat login lagi.
+- Tampilan **empty state** bila kuis belum diisi atau belum dipublikasikan guru.
 
 ### Game
-- Blok Game membuka game pembelajaran sesuai konfigurasi guru (poin, ambang lulus).
+- Blok Game mengarah ke area game sesuai konfigurasi guru (poin, ambang lulus).
 - Nilai sesi ikut dihitung ke gradebook (akun guru tidak dihitung saat playtest).
 
-### Forum Diskusi Modul
-- Di bawah materi ada **forum khusus modul**: siswa bisa bertanya dan membalas.
+### Forum Diskusi Pertemuan
+- Di bawah materi ada **forum khusus pertemuan**: siswa bisa bertanya dan membalas.
 - Siswa dapat menghapus postingannya sendiri; guru dapat menghapus semua postingan.
 
 ## 6. Area Game (`/learn/[slug]/games`)
@@ -75,12 +83,13 @@ ditandai centang. Jenis blok dan cara mengerjakannya:
 
 ## 7. Progres dan Sinkronisasi
 
-- Setiap blok yang ditandai selesai memanggil `markBlockComplete` / `syncBlockCompletions` →
-  persentase progres course ikut ter-update di database.
+- Setiap blok yang ditandai selesai (termasuk setelah mengirim lembar kerja) memanggil
+  `markBlockComplete` / `syncBlockCompletions` → persentase progres course ikut ter-update di
+  database.
 - Untuk siswa yang **sudah bergabung**, progres selalu tersimpan di server sehingga bisa
   dilanjutkan di perangkat lain; siswa yang belum bergabung masih memakai progres perangkat
   (ditampilkan label "progres perangkat") sampai enrollment terjadi.
-- Nilai kuis, jawaban tugas, dan aktivitas terkumpul otomatis di analitik milik guru.
+- Nilai kuis dan lembar kerja terkumpul otomatis di analitik milik guru.
 
 ## Ringkasan Perjalanan Singkat
 
@@ -91,9 +100,9 @@ ditandai centang. Jenis blok dan cara mengerjakannya:
    ↓
 /pilih-pembelajaran  atau  buka /learn/[slug]
    ↓
-modul  →  baca materi / tonton video / buka PDF
+pertemuan  →  baca materi / tonton video / buka PDF-PPT-DOCX
    ↓
-kerjakan kuis · kirim tugas (upload) · main game · ikut forum
+buka visual aktivitas · kerjakan kuis · isi lembar kerja (jawaban + lampiran) · main game · forum
    ↓
 blok "Selesai"  →  progres tersimpan di database
    ↓

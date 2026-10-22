@@ -6,13 +6,35 @@ export const runtime = "nodejs";
 
 const MAX_PDF = 8 * 1024 * 1024;
 const MAX_IMAGE = 5 * 1024 * 1024;
-const ALLOWED = new Set([
-  "application/pdf",
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-]);
+const MAX_DOCUMENT = 20 * 1024 * 1024;
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+
+const ALLOWED = new Set(Object.values(MIME_BY_EXTENSION));
+
+/** Browser Windows kadang mengirim tipe kosong; pakai ekstensi sebagai cadangan. */
+function resolveMime(file: File): string {
+  if (file.type && ALLOWED.has(file.type)) return file.type;
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return MIME_BY_EXTENSION[extension] ?? file.type;
+}
+
+function limitFor(mime: string) {
+  if (mime === "application/pdf") return MAX_PDF;
+  if (mime.startsWith("image/")) return MAX_IMAGE;
+  return MAX_DOCUMENT;
+}
 
 /**
  * Unggah berkas (PDF materi guru atau bukti jawaban siswa) ke database.
@@ -45,14 +67,15 @@ export async function POST(request: Request) {
     if (!(file instanceof File)) {
       return NextResponse.json({ ok: false, error: "Berkas tidak ditemukan." }, { status: 400 });
     }
-    if (!ALLOWED.has(file.type)) {
+    const mimeType = resolveMime(file);
+    if (!ALLOWED.has(mimeType)) {
       return NextResponse.json(
-        { ok: false, error: "Format harus PDF atau gambar (PNG/JPG/WEBP)." },
+        { ok: false, error: "Format harus PDF, PPT/PPTX, DOC/DOCX, atau gambar (PNG/JPG/WEBP)." },
         { status: 415 }
       );
     }
 
-    const limit = file.type === "application/pdf" ? MAX_PDF : MAX_IMAGE;
+    const limit = limitFor(mimeType);
     if (file.size > limit) {
       return NextResponse.json(
         { ok: false, error: `Ukuran maksimal ${Math.round(limit / (1024 * 1024))} MB.` },
@@ -81,6 +104,7 @@ export async function POST(request: Request) {
         );
       }
       // Materi guru boleh dibaca peserta (termasuk siswa lewat link).
+      // Dokumen modul ajar hanya untuk guru pemilik.
       isPublic = purpose === "material";
     } else if (profile.role === "STUDENT") {
       const enrollment = await prisma.enrollment.findUnique({
@@ -104,7 +128,7 @@ export async function POST(request: Request) {
         ownerId: profile.id,
         courseId,
         fileName: file.name || "berkas",
-        mimeType: file.type,
+        mimeType,
         size: buffer.length,
         isPublic,
         data: buffer,

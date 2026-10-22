@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import type { PublishedPayload } from "@/lib/actions/dashboards";
 
 /**
  * Menyimpan progres penyelesaian satu blok materi oleh siswa yang login.
@@ -209,17 +210,58 @@ export async function submitQuizAttempt(input: {
   if (!enrollment || enrollment.status !== "ACTIVE")
     return { ok: false, error: "Kamu belum bergabung ke pembelajaran ini." };
 
-  const quiz = await prisma.quiz.findUnique({
-    where: { blockId: input.blockId },
-    include: { questions: true },
+  // Kuis yang dinilai adalah versi yang benar-benar dilihat siswa.
+  const blockRow = await prisma.lessonBlock.findUnique({
+    where: { id: input.blockId },
+    select: {
+      module: {
+        select: {
+          course: {
+            select: { ownerId: true, publish: { select: { payload: true } } },
+          },
+        },
+      },
+    },
   });
-  if (!quiz) return { ok: false, error: "Kuis tidak ditemukan." };
+  if (!blockRow) return { ok: false, error: "Kuis tidak ditemukan." };
+
+  const publishedPayload = blockRow.module.course.publish?.payload as PublishedPayload | null | undefined;
+  const publishedQuiz = publishedPayload?.quizzes?.[input.blockId];
+
+  let maxAttempts: number;
+  let passThreshold: number;
+  let scoringQuestions: Array<{ id: string; answer: string; points: number }>;
+
+  if (publishedQuiz) {
+    // Siswa dinilai dari snapshot terbit, walau guru sedang menyunting draft.
+    const liveQuiz = await prisma.quiz.findUnique({
+      where: { blockId: input.blockId },
+      include: { questions: true },
+    });
+    const liveAnswers = new Map(liveQuiz?.questions.map((q) => [q.id, q.answer]) ?? []);
+    maxAttempts = publishedQuiz.maxAttempts;
+    passThreshold = publishedQuiz.passThreshold;
+    scoringQuestions = publishedQuiz.questions.map((q) => ({
+      id: q.id,
+      answer: q.answer ?? liveAnswers.get(q.id) ?? "",
+      points: q.points,
+    }));
+  } else {
+    const quiz = await prisma.quiz.findUnique({
+      where: { blockId: input.blockId },
+      include: { questions: true },
+    });
+    if (!quiz) return { ok: false, error: "Kuis tidak ditemukan." };
+    maxAttempts = quiz.maxAttempts;
+    passThreshold = quiz.passThreshold;
+    scoringQuestions = quiz.questions.map((q) => ({ id: q.id, answer: q.answer, points: q.points }));
+  }
 
   // Hitung skor di server dengan mencocokkan jawaban ke kunci.
   let score = 0;
-  const total = quiz.questions.reduce((sum, q) => sum + q.points, 0);
+  const total = scoringQuestions.reduce((sum, q) => sum + q.points, 0);
   const detail: Record<string, { given: string; correct: boolean }> = {};
-  for (const q of quiz.questions) {
+  for (const q of scoringQuestions) {
     const given = input.answers[String(q.id)] ?? "";
     const correct = given.trim().toLowerCase() === q.answer.trim().toLowerCase();
     if (correct) score += q.points;
@@ -229,8 +271,8 @@ export async function submitQuizAttempt(input: {
   const used = await prisma.quizAttempt.count({
     where: { studentId: user.id, blockId: input.blockId },
   });
-  if (used >= quiz.maxAttempts)
-    return { ok: false, error: `Kesempatan attempt habis (${quiz.maxAttempts}).` };
+  if (used >= maxAttempts)
+    return { ok: false, error: `Kesempatan attempt habis (${maxAttempts}).` };
 
   try {
     await prisma.quizAttempt.create({
@@ -241,7 +283,7 @@ export async function submitQuizAttempt(input: {
         attemptNumber: used + 1,
         score,
         totalPoints: total,
-        passed: total > 0 ? (score / total) * 100 >= quiz.passThreshold : false,
+        passed: total > 0 ? (score / total) * 100 >= passThreshold : false,
         answers: detail,
         // Unik per siswa + blok + percobaan (idempoten saat retry).
         eventId: `${user.id}-${input.blockId}-${used + 1}`,

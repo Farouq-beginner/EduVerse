@@ -330,7 +330,7 @@ export default function StudentLearningPage() {
               <span className="meta-chip">
                 <RefreshCw size={13} /> {account ? "Tersinkron ke akun" : "Progres perangkat"}
               </span>
-              <span className="meta-chip">{modules.length} modul</span>
+              <span className="meta-chip">{modules.length} pertemuan</span>
             </div>
           </div>
           <div className="student-hero-card__ring">
@@ -347,7 +347,7 @@ export default function StudentLearningPage() {
         <div className="student-stats">
           <StudentStat icon={<Check size={17} />} value={`${completed.length}/${totalBlocks}`} label="aktivitas selesai" />
           <StudentStat icon={<Trophy size={17} />} value={`${progress}%`} label="progres pembelajaran" />
-          <StudentStat icon={<MessageCircle size={17} />} value={String(modules.length)} label="forum modul tersedia" />
+          <StudentStat icon={<MessageCircle size={17} />} value={String(modules.length)} label="forum pertemuan tersedia" />
         </div>
 
         <div className="student-content-grid">
@@ -355,15 +355,15 @@ export default function StudentLearningPage() {
             <div className="section-title" style={{ marginTop: 0 }}>
               <div>
                 <div className="eyebrow">ALUR BELAJAR</div>
-                <h2>Modul untukmu</h2>
+                <h2>Pertemuan untukmu</h2>
               </div>
               <StatusPill tone="teal">{progress}% selesai</StatusPill>
             </div>
             {modules.length === 0 ? (
               <div className="empty-state-card">
                 <BookOpen size={24} />
-                <h2>Modul belum tersedia</h2>
-                <p>Guru belum menambahkan modul ke pembelajaran ini.</p>
+                <h2>Pertemuan belum tersedia</h2>
+                <p>Guru belum menambahkan pertemuan ke pembelajaran ini.</p>
               </div>
             ) : (
               modules.map((module, moduleIndex) => (
@@ -580,7 +580,7 @@ function ModuleCard({ module, index, completed, courseSlug }: { module: Module; 
           </small>
         </div>
         <Link href={`/learn/${courseSlug}/modul/${module.id}`} className="module-open-link">
-          Buka modul <ChevronRight size={14} />
+          Buka pertemuan <ChevronRight size={14} />
         </Link>
       </div>
       <div className="lesson-list">

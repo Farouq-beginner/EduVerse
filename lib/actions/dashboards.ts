@@ -439,7 +439,7 @@ export async function createTeacherCourse(input: {
         slug,
         title,
         shortTitle: title.length > 34 ? `${title.slice(0, 32)}…` : title,
-        description: input.description?.trim() || "Pembelajaran baru — tambahkan modul dan materi.",
+        description: input.description?.trim() || "Pembelajaran baru — tambahkan pertemuan dan materi.",
         subject: input.subject?.trim() || "Matematika",
         grade: input.grade?.trim() || "Kelas VII",
         state: "DRAFT",
@@ -475,35 +475,6 @@ export async function createTeacherCourse(input: {
 }
 
 /** Simpan judul/deskripsi pembelajaran dari course builder. */
-export async function updateCourseMeta(
-  courseId: string,
-  input: { title?: string; description?: string; subject?: string; grade?: string }
-): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const me = await getSessionProfile();
-    if (!me || me.role !== "TEACHER") return { ok: false, error: "Hanya guru yang boleh mengubah pembelajaran." };
-    const course = await prisma.course.findFirst({
-      where: { id: courseId, ownerId: me.id },
-      select: { id: true },
-    });
-    if (!course) return { ok: false, error: "Pembelajaran bukan milikmu." };
-
-    const title = input.title?.trim();
-    await prisma.course.update({
-      where: { id: courseId },
-      data: {
-        ...(title ? { title, shortTitle: title.length > 34 ? `${title.slice(0, 32)}…` : title } : {}),
-        ...(input.description !== undefined ? { description: input.description } : {}),
-        ...(input.subject ? { subject: input.subject } : {}),
-        ...(input.grade ? { grade: input.grade } : {}),
-      },
-    });
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "Gagal menyimpan identitas pembelajaran." };
-  }
-}
-
 /**
  * Satu pintu data workspace guru: profil dibaca sekali, lalu peserta, modul,
  * analitik, jawaban, dan aktivitas diambil paralel untuk course miliknya.
@@ -668,7 +639,48 @@ export type DbCourse = {
   access: string;
   joinToken: string;
   ownerName: string;
+  /// true bila ada suntingan draft yang belum dipublikasikan ke siswa.
+  hasDraftChanges: boolean;
+  publishedAt: string | null;
+  /// Dokumen modul ajar (PDF/PPT/DOCX) — hanya dikelola & dilihat guru.
+  moduleDocFileId: string | null;
+  moduleDocName: string | null;
+  moduleDocMime: string | null;
   modules: DbModule[];
+};
+
+/** Snapshot yang dipublikasikan ke siswa saat guru menekan Publish. */
+export type PublishedPayload = {
+  course: {
+    title: string;
+    shortTitle: string;
+    description: string;
+    subject: string;
+    grade: string;
+    duration: string;
+  };
+  modules: DbModule[];
+  quizzes: Record<
+    string,
+    {
+      title: string;
+      instructions: string;
+      totalPoints: number;
+      maxAttempts: number;
+      passThreshold: number;
+      showScore: boolean;
+      questions: Array<{
+        id: string;
+        prompt: string;
+        options: string[];
+        explanation: string;
+        points: number;
+        /// Kunci jawaban hanya disimpan server-side agar penilaian mengikuti versi terbit.
+        answer?: string;
+      }>;
+    }
+  >;
+  publishedAt: string;
 };
 
 /**
@@ -690,6 +702,7 @@ export async function getCourseStructure(
       where: { slug },
       include: {
         owner: { select: { fullName: true } },
+        publish: { select: { payload: true, publishedAt: true } },
         modules: {
           orderBy: { order: "asc" },
           include: { blocks: { orderBy: { order: "asc" } } },
@@ -698,6 +711,7 @@ export async function getCourseStructure(
     });
     if (!course) return null;
 
+    let teacherView = false;
     if (options?.teacherOnly) {
       let viewerId = options.viewerId;
       let viewerRole = options.viewerRole;
@@ -707,24 +721,52 @@ export async function getCourseStructure(
         viewerRole = me?.role;
       }
       if (!viewerId || viewerRole !== "TEACHER" || course.ownerId !== viewerId) return null;
+      teacherView = true;
     } else if (course.state !== "PUBLISHED") {
       // Course draft/arsip tidak boleh dilihat siswa.
       return null;
     }
 
-    return {
+    const base = {
       id: course.id,
       slug: course.slug,
+      joinToken: course.joinToken,
+      access: course.access,
+      state: course.state,
+      ownerName: course.owner.fullName,
+      moduleDocFileId: course.moduleDocFileId,
+      moduleDocName: course.moduleDocName,
+      moduleDocMime: course.moduleDocMime,
+      publishedAt: course.publish ? course.publish.publishedAt.toISOString() : null,
+    };
+
+    // Guru melihat draft (tabel materi). Siswa hanya melihat snapshot terbit —
+    // suntingan guru yang belum di-Publish tidak pernah muncul di halaman siswa.
+    const payload = course.publish?.payload as PublishedPayload | null | undefined;
+    if (!teacherView && payload) {
+      return {
+        ...base,
+        ...payload.course,
+        hasDraftChanges: false,
+        modules: payload.modules ?? [],
+      };
+    }
+
+    const hasDraftChanges = teacherView
+      ? !course.publish ||
+        course.state !== "PUBLISHED" ||
+        (course.draftUpdatedAt ? course.draftUpdatedAt > course.publish.publishedAt : false)
+      : false;
+
+    return {
+      ...base,
       title: course.title,
       shortTitle: course.shortTitle,
       description: course.description,
       subject: course.subject,
       grade: course.grade,
       duration: course.duration,
-      state: course.state,
-      access: course.access,
-      joinToken: course.joinToken,
-      ownerName: course.owner.fullName,
+      hasDraftChanges,
       modules: course.modules.map((m) => ({
         id: m.id,
         title: m.title,
@@ -1042,6 +1084,8 @@ export async function getCourseSubmissions(
 }
 
 export type SaveCourseInput = {
+  /// Identitas pembelajaran disimpan bersama materi supaya satu tombol cukup.
+  meta?: { title: string; description: string; subject: string; grade: string; duration?: string };
   modules: Array<{
     id: string;
     title: string;
@@ -1090,93 +1134,257 @@ export async function saveCourseStructure(
     const keepModuleIds: string[] = [];
     const keepBlockIds: string[] = [];
 
-    for (const [mIndex, m] of input.modules.entries()) {
-      const moduleId = existingModuleIds.has(m.id)
-        ? m.id
-        : (await prisma.module.create({
+    // Satu transaksi: semua materi tersimpan atau tidak sama sekali, sehingga
+    // tidak ada lagi data yang hilang / tidak sinkron saat guru menyimpan.
+    // Penulisan dijalankan paralel + timeout longgar karena database remote.
+    await prisma.$transaction(
+      async (tx) => {
+        if (input.meta && input.meta.title.trim()) {
+          const title = input.meta.title.trim();
+          await tx.course.update({
+            where: { id: courseId },
             data: {
-              courseId,
+              title,
+              shortTitle: title.length > 34 ? `${title.slice(0, 32)}…` : title,
+              description: input.meta.description,
+              subject: input.meta.subject,
+              grade: input.meta.grade,
+              ...(input.meta.duration !== undefined ? { duration: input.meta.duration } : {}),
+              draftUpdatedAt: new Date(),
+            },
+          });
+        } else {
+          await tx.course.update({ where: { id: courseId }, data: { draftUpdatedAt: new Date() } });
+        }
+
+        // Pertemuan: update yang sudah ada, buat yang baru — paralel.
+        const moduleIds = await Promise.all(
+          input.modules.map(async (m, mIndex) => {
+            const data = {
               title: m.title,
               eyebrow: m.eyebrow,
               duration: m.duration || "10 menit",
               accent: m.accent,
               order: m.order ?? mIndex,
-            },
-          })).id;
-      if (existingModuleIds.has(m.id)) {
-        // Judul, label, dan durasi modul ikut tersimpan saat guru mengeditnya.
-        await prisma.module.update({
-          where: { id: moduleId },
-          data: {
-            title: m.title,
-            eyebrow: m.eyebrow,
-            duration: m.duration || "10 menit",
-            accent: m.accent,
-            order: m.order ?? mIndex,
-          },
-        });
-      }
-      keepModuleIds.push(moduleId);
+            };
+            if (existingModuleIds.has(m.id)) {
+              await tx.module.update({ where: { id: m.id }, data });
+              return m.id;
+            }
+            const created = await tx.module.create({ data: { ...data, courseId } });
+            return created.id;
+          })
+        );
+        keepModuleIds.push(...moduleIds);
 
-      if (!existingModuleIds.has(m.id)) {
-        // Baru dibuat — tidak ada blok lama.
-        existingModuleIds.add(moduleId);
-      }
+        // Materi: update yang sudah ada, buat yang baru — paralel per pertemuan.
+        const blockIds = await Promise.all(
+          input.modules.map((m, mIndex) =>
+            Promise.all(
+              m.blocks.map(async (b, bIndex) => {
+                const data = {
+                  type: (b.type || "text").toUpperCase() as "TEXT",
+                  title: b.title,
+                  description: b.description ?? "",
+                  duration: b.duration ?? "5 menit",
+                  order: b.order ?? bIndex,
+                  material: (b.material ?? undefined) as never,
+                };
+                if (existingBlockIds.has(b.id)) {
+                  await tx.lessonBlock.update({ where: { id: b.id }, data });
+                  return b.id;
+                }
+                const created = await tx.lessonBlock.create({
+                  data: { ...data, moduleId: moduleIds[mIndex] },
+                });
+                return created.id;
+              })
+            )
+          )
+        );
+        keepBlockIds.push(...blockIds.flat());
 
-      for (const [bIndex, b] of m.blocks.entries()) {
-        const data = {
-          type: (b.type || "text").toUpperCase() as "TEXT",
-          title: b.title,
-          description: b.description ?? "",
-          duration: b.duration ?? "5 menit",
-          order: b.order ?? bIndex,
-          material: (b.material ?? undefined) as never,
-        };
-        if (existingBlockIds.has(b.id)) {
-          await prisma.lessonBlock.update({ where: { id: b.id }, data });
-          keepBlockIds.push(b.id);
-        } else {
-          const created = await prisma.lessonBlock.create({
-            data: { ...data, moduleId },
-          });
-          keepBlockIds.push(created.id);
+        // Hapus blok & pertemuan yang tidak lagi ada. Berkas yang dihapus manual
+        // oleh guru sudah dihapus lewat tombol hapus — bukan otomatis di sini.
+        const removedBlocks = [...existingBlockIds].filter((id) => !keepBlockIds.includes(id));
+        if (removedBlocks.length) {
+          await tx.lessonBlock.deleteMany({ where: { id: { in: removedBlocks } } });
         }
-      }
-    }
-
-    // Bersihkan berkas materi yang tidak lagi dipakai blok mana pun.
-    const usedFileIds = input.modules
-      .flatMap((m) => m.blocks)
-      .map((b) => {
-        const material = b.material as { pdfFileId?: string } | undefined;
-        return material?.pdfFileId;
-      })
-      .filter((id): id is string => Boolean(id));
-    await prisma.storedFile.deleteMany({
-      where: {
-        courseId,
-        isPublic: true,
-        ownerId: me.id,
-        ...(usedFileIds.length ? { id: { notIn: usedFileIds } } : {}),
+        const removedModules = [...existingModuleIds].filter((id) => !keepModuleIds.includes(id));
+        if (removedModules.length) {
+          await tx.module.deleteMany({ where: { id: { in: removedModules } } });
+        }
       },
-    });
-
-    // Hapus blok & modul yang tidak lagi ada.
-    const removedBlocks = [...existingBlockIds].filter((id) => !keepBlockIds.includes(id));
-    if (removedBlocks.length) {
-      await prisma.lessonBlock.deleteMany({ where: { id: { in: removedBlocks } } });
-    }
-    const removedModules = [...existingModuleIds].filter((id) => !keepModuleIds.includes(id));
-    if (removedModules.length) {
-      await prisma.module.deleteMany({ where: { id: { in: removedModules } } });
-    }
+      { maxWait: 15_000, timeout: 60_000 }
+    );
 
     // Kembalikan struktur terbaru supaya client memakai id blok yang benar.
     const courseRow = await prisma.course.findUnique({ where: { id: courseId }, select: { slug: true } });
     const fresh = courseRow ? await getCourseStructure(courseRow.slug, { teacherOnly: true }) : null;
     return { ok: true, structure: fresh ?? undefined };
   } catch {
-    return { ok: false, error: "Gagal menyimpan struktur course." };
+    return { ok: false, error: "Gagal menyimpan draft course." };
+  }
+}
+
+/**
+ * Publikasikan draft materi ke siswa. Snapshot disimpan terpisah supaya
+ * suntingan berikutnya tetap di draft dan tidak langsung terlihat siswa.
+ */
+export async function publishCourse(
+  courseId: string
+): Promise<{ ok: boolean; error?: string; publishedAt?: string }> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER")
+      return { ok: false, error: "Hanya guru yang boleh mempublikasikan." };
+
+    const course = await prisma.course.findFirst({
+      where: { id: courseId, ownerId: me.id },
+      include: {
+        modules: {
+          orderBy: { order: "asc" },
+          include: {
+            blocks: {
+              orderBy: { order: "asc" },
+              include: { quiz: { include: { questions: { orderBy: { order: "asc" } } } } },
+            },
+          },
+        },
+      },
+    });
+    if (!course) return { ok: false, error: "Course tidak ditemukan atau bukan milikmu." };
+
+    const now = new Date();
+    const quizzes: PublishedPayload["quizzes"] = {};
+    for (const module of course.modules) {
+      for (const block of module.blocks) {
+        if (!block.quiz) continue;
+        quizzes[block.id] = {
+          title: block.quiz.title,
+          instructions: block.quiz.instructions,
+          totalPoints: block.quiz.totalPoints,
+          maxAttempts: block.quiz.maxAttempts,
+          passThreshold: block.quiz.passThreshold,
+          showScore: block.quiz.showScore,
+          questions: block.quiz.questions.map((q) => ({
+            id: q.id,
+            prompt: q.prompt,
+            options: Array.isArray(q.options) ? (q.options as string[]) : [],
+            explanation: q.explanation,
+            points: q.points,
+            answer: q.answer,
+          })),
+        };
+      }
+    }
+
+    const payload: PublishedPayload = {
+      course: {
+        title: course.title,
+        shortTitle: course.shortTitle,
+        description: course.description,
+        subject: course.subject,
+        grade: course.grade,
+        duration: course.duration,
+      },
+      modules: course.modules.map((m) => ({
+        id: m.id,
+        title: m.title,
+        eyebrow: m.eyebrow,
+        duration: m.duration,
+        accent: m.accent,
+        order: m.order,
+        blocks: m.blocks.map((b) => ({
+          id: b.id,
+          moduleId: b.moduleId,
+          type: b.type,
+          title: b.title,
+          description: b.description,
+          duration: b.duration,
+          material: b.material,
+        })),
+      })),
+      quizzes,
+      publishedAt: now.toISOString(),
+    };
+
+    await prisma.$transaction([
+      prisma.coursePublish.upsert({
+        where: { courseId },
+        create: { courseId, payload: payload as never, publishedAt: now },
+        update: { payload: payload as never, publishedAt: now },
+      }),
+      prisma.course.update({
+        where: { id: courseId },
+        data: { state: "PUBLISHED", publishedAt: now, draftUpdatedAt: now },
+      }),
+    ]);
+
+    return { ok: true, publishedAt: now.toISOString() };
+  } catch {
+    return { ok: false, error: "Gagal mempublikasikan pembelajaran." };
+  }
+}
+
+/** Simpan/gani dokumen modul ajar milik guru (PDF/PPT/DOCX). */
+export async function setCourseModuleDoc(
+  courseId: string,
+  doc: { fileId: string; name: string; mime: string }
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER") return { ok: false, error: "Hanya guru yang boleh mengunggah modul." };
+
+    const course = await prisma.course.findFirst({
+      where: { id: courseId, ownerId: me.id },
+      select: { id: true, moduleDocFileId: true },
+    });
+    if (!course) return { ok: false, error: "Course tidak ditemukan atau bukan milikmu." };
+
+    const file = await prisma.storedFile.findFirst({
+      where: { id: doc.fileId, courseId, ownerId: me.id },
+      select: { id: true },
+    });
+    if (!file) return { ok: false, error: "Berkas tidak ditemukan di pembelajaran ini." };
+
+    await prisma.course.update({
+      where: { id: courseId },
+      data: { moduleDocFileId: doc.fileId, moduleDocName: doc.name, moduleDocMime: doc.mime },
+    });
+
+    // Berkas modul lama tidak dipakai lagi — hapus agar tidak menumpuk.
+    if (course.moduleDocFileId && course.moduleDocFileId !== doc.fileId) {
+      await prisma.storedFile.deleteMany({ where: { id: course.moduleDocFileId } });
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Gagal menyimpan modul." };
+  }
+}
+
+/** Hapus dokumen modul ajar dari pembelajaran milik guru. */
+export async function removeCourseModuleDoc(courseId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER") return { ok: false, error: "Hanya guru yang boleh menghapus modul." };
+
+    const course = await prisma.course.findFirst({
+      where: { id: courseId, ownerId: me.id },
+      select: { id: true, moduleDocFileId: true },
+    });
+    if (!course) return { ok: false, error: "Course tidak ditemukan atau bukan milikmu." };
+
+    await prisma.course.update({
+      where: { id: courseId },
+      data: { moduleDocFileId: null, moduleDocName: null, moduleDocMime: null },
+    });
+    if (course.moduleDocFileId) {
+      await prisma.storedFile.deleteMany({ where: { id: course.moduleDocFileId } });
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Gagal menghapus modul." };
   }
 }
 
@@ -1321,6 +1529,45 @@ export async function getQuizForBlock(blockId: string): Promise<{
   }>;
 } | null> {
   try {
+    // Siswa hanya boleh melihat kuis yang sudah dipublikasikan. Guru pemilik
+    // tetap melihat draft terbaru supaya bisa mengedit.
+    const me = await getSessionProfile();
+    const block = await prisma.lessonBlock.findUnique({
+      where: { id: blockId },
+      select: {
+        id: true,
+        module: {
+          select: {
+            course: {
+              select: { ownerId: true, publish: { select: { payload: true } } },
+            },
+          },
+        },
+      },
+    });
+    if (!block) return null;
+
+    const isOwner = Boolean(me && me.role === "TEACHER" && block.module.course.ownerId === me.id);
+    const payload = block.module.course.publish?.payload as PublishedPayload | null | undefined;
+    if (!isOwner && payload) {
+      const published = payload.quizzes?.[blockId];
+      if (!published) return null;
+      return {
+        title: published.title,
+        instructions: published.instructions,
+        showScore: published.showScore,
+        totalPoints: published.totalPoints,
+        passThreshold: published.passThreshold,
+        questions: published.questions.map((q) => ({
+          id: q.id,
+          prompt: q.prompt,
+          options: Array.isArray(q.options) ? q.options : [],
+          explanation: q.explanation,
+          points: q.points,
+        })),
+      };
+    }
+
     const quiz = await prisma.quiz.findUnique({
       where: { blockId },
       include: { questions: { orderBy: { order: "asc" } } },

@@ -108,7 +108,7 @@ export function DiscussionForum({
     [moduleId, courseSlug]
   );
 
-  // Muat diskusi modul + sinkronkan berkala supaya terasa live.
+  // Muat diskusi pertemuan + sinkronkan berkala supaya terasa live.
   useEffect(() => {
     load();
     const timer = window.setInterval(() => load(true), POLL_INTERVAL);
@@ -220,11 +220,11 @@ export function DiscussionForum({
       <div className="discussion-forum__top">
         <div>
           <div className="eyebrow" style={{ color: "var(--violet)" }}>
-            RUANG DISKUSI MODUL
+            RUANG DISKUSI PERTEMUAN
           </div>
-          <h2>{moduleTitle ? `Forum Diskusi · ${moduleTitle}` : "Forum Diskusi Modul"}</h2>
+          <h2>{moduleTitle ? `Forum Diskusi · ${moduleTitle}` : "Forum Diskusi Pertemuan"}</h2>
           <p>
-            Setiap modul punya forum sendiri. Tanyakan bagian yang belum kamu pahami dan diskusikan bersama guru
+            Setiap pertemuan punya forum sendiri. Tanyakan bagian yang belum kamu pahami dan diskusikan bersama guru
             serta teman sekelas.
           </p>
         </div>
@@ -251,13 +251,13 @@ export function DiscussionForum({
       {loading && (
         <div className="forum-loading">
           <Loader2 size={16} className="spin" />
-          <span>Memuat diskusi khusus modul ini...</span>
+          <span>Memuat diskusi khusus pertemuan ini...</span>
         </div>
       )}
 
       {showNewPost && (
         <form className="new-post-card" onSubmit={handleCreatePost}>
-          <h4>Tulis Pertanyaan Baru di Modul Ini</h4>
+          <h4>Tulis Pertanyaan Baru di Pertemuan Ini</h4>
           <input
             type="text"
             placeholder="Judul pertanyaan (misalnya: Mengapa (-2) × (-3) = 6?)"
@@ -286,8 +286,8 @@ export function DiscussionForum({
       {!loading && posts.length === 0 && (
         <div className="empty-state">
           <MessageCircle size={24} />
-          <strong>Forum modul ini masih kosong</strong>
-          <p>Jadilah yang pertama bertanya. Diskusi ini hanya berisi topik dari modul ini.</p>
+          <strong>Forum pertemuan ini masih kosong</strong>
+          <p>Jadilah yang pertama bertanya. Diskusi ini hanya berisi topik dari pertemuan ini.</p>
         </div>
       )}
 

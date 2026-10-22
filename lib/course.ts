@@ -49,9 +49,13 @@ export function toCourse(course: DbCourse): Course {
   };
 }
 
-/** Petakan modul UI ke payload server (menormalkan id & urutan). */
-export function toSavePayload(modules: Module[]) {
+/** Petakan pertemuan UI ke payload server (menormalkan id & urutan). */
+export function toSavePayload(
+  modules: Module[],
+  meta?: { title: string; description: string; subject: string; grade: string; duration?: string }
+) {
   return {
+    ...(meta ? { meta } : {}),
     modules: modules.map((module, moduleIndex) => ({
       id: module.id,
       title: module.title,

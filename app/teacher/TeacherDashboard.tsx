@@ -26,6 +26,7 @@ import { Toast } from "@/components/Toast";
 import {
   createTeacherCourse,
   getTeacherWorkspace,
+  publishCourse,
   updateCourseSettings,
   type DbCourse,
   type ModuleAnalyticsRow,
@@ -164,7 +165,11 @@ export function TeacherDashboard({
 
   async function togglePublish(course: TeacherCourseCard) {
     const next = course.state === "PUBLISHED" ? "draft" : "published";
-    const result = await updateCourseSettings(course.id, { state: next });
+    // Publish selalu mengambil snapshot draft terbaru, bukan sekadar mengubah status.
+    const result =
+      next === "published"
+        ? await publishCourse(course.id)
+        : await updateCourseSettings(course.id, { state: "draft" });
     if (!result.ok) {
       setToast(result.error ?? "Gagal menyimpan status.");
       return;
@@ -172,7 +177,11 @@ export function TeacherDashboard({
     setCourses((current) =>
       current.map((item) => (item.id === course.id ? { ...item, state: next === "published" ? "PUBLISHED" : "DRAFT" } : item))
     );
-    setToast(next === "published" ? "Pembelajaran dipublikasikan." : "Pembelajaran dikembalikan ke draft.");
+    setToast(
+      next === "published"
+        ? "Pembelajaran dipublikasikan dari draft terbaru."
+        : "Pembelajaran dikembalikan ke draft. Siswa belum bisa membukanya."
+    );
   }
 
   async function handleCreate(event: React.FormEvent) {
@@ -192,7 +201,7 @@ export function TeacherDashboard({
     setCourses((current) => [result.course!, ...current]);
     setCreateForm(emptyForm);
     setShowCreate(false);
-    setToast("Pembelajaran baru dibuat. Yuk isi modul pertamamu.");
+    setToast("Pembelajaran baru dibuat. Yuk isi pertemuan pertamamu.");
     router.push(`/teacher/course/${result.course.slug}`);
   }
 
@@ -332,7 +341,7 @@ export function TeacherDashboard({
                     <BookOpen size={22} />
                   </span>
                   <strong>Workspace ini masih kosong</strong>
-                  <p>Buat pembelajaran baru. Data modul, peserta, dan jawaban akan tersimpan di akunmu sendiri.</p>
+                  <p>Buat pembelajaran baru. Data pertemuan, peserta, dan jawaban akan tersimpan di akunmu sendiri.</p>
                   <button className="button button--primary button--small" onClick={() => setShowCreate(true)}>
                     <Plus size={15} /> Buat pembelajaran pertama
                   </button>
@@ -346,7 +355,7 @@ export function TeacherDashboard({
                         <div>
                           <strong>{course.title}</strong>
                           <small>
-                            {course.subject} · {course.grade} · {course.moduleCount} modul · {course.blockCount} materi
+                            {course.subject} · {course.grade} · {course.moduleCount} pertemuan · {course.blockCount} materi
                           </small>
                         </div>
                         <StatusPill tone={course.state === "PUBLISHED" ? "teal" : "yellow"}>
@@ -440,7 +449,7 @@ export function TeacherDashboard({
 
           <div className="dashboard-grid">
             <div style={{ gridColumn: "1 / -1" }}>
-              <SectionTitle eyebrow="MATERI" title={selectedCourse ? `Modul · ${selectedCourse.title}` : "Modul"} />
+              <SectionTitle eyebrow="MATERI" title={selectedCourse ? `Pertemuan · ${selectedCourse.title}` : "Pertemuan"} />
               <div className="panel">
                 {structureLoading ? (
                   <div className="sync-loading">
@@ -450,8 +459,8 @@ export function TeacherDashboard({
                 ) : moduleRows.length === 0 ? (
                   <div className="empty-state">
                     <FileText size={22} />
-                    <strong>Belum ada modul</strong>
-                    <p>{selectedCourse ? "Buka course builder untuk menambah modul pertama." : "Buat pembelajaran dulu."}</p>
+                    <strong>Belum ada pertemuan</strong>
+                    <p>{selectedCourse ? "Buka course builder untuk menambah pertemuan pertama." : "Buat pembelajaran dulu."}</p>
                   </div>
                 ) : (
                   <div className="module-list">
@@ -473,7 +482,7 @@ export function TeacherDashboard({
                     {moduleRows.length > 0 && (
                       <div className="module-list-footer">
                         <Link href={`/teacher/course/${selectedCourse?.slug}`} className="button button--primary button--small">
-                          <Pencil size={14} /> Kelola semua modul
+                          <Pencil size={14} /> Kelola semua pertemuan
                         </Link>
                       </div>
                     )}
@@ -606,7 +615,7 @@ export function TeacherDashboard({
             <div>
               <div className="eyebrow">INSIGHT YANG BISA DITINDAKLANJUTI</div>
               <h2>{selectedCourse?.title ?? "Pilih pembelajaran"}</h2>
-              <p className="section-subtitle">Rincian progres, respons, dan skor mengikuti struktur modul di database.</p>
+              <p className="section-subtitle">Rincian progres, respons, dan skor mengikuti struktur pertemuan di database.</p>
             </div>
             {courses.length > 1 && (
               <select
@@ -634,7 +643,7 @@ export function TeacherDashboard({
 
           <div className="metrics-grid">
             <MetricCard
-              label="Penyelesaian modul"
+              label="Penyelesaian pertemuan"
               value={`${analyticsRows.length ? Math.round(analyticsRows.reduce((sum, row) => sum + row.completion, 0) / analyticsRows.length) : 0}%`}
               delta="dihitung dari progres siswa"
               icon="check"
@@ -648,10 +657,10 @@ export function TeacherDashboard({
           <div className="table-panel analytics-module-table">
             <div className="table-toolbar">
               <div>
-                <strong>Rincian aktivitas per modul</strong>
+                <strong>Rincian aktivitas per pertemuan</strong>
                 <small>Respons dan nilai diperbarui dari aktivitas siswa.</small>
               </div>
-              <StatusPill tone="violet">{analyticsRows.length} modul</StatusPill>
+              <StatusPill tone="violet">{analyticsRows.length} pertemuan</StatusPill>
             </div>
             {structureLoading ? (
               <div className="sync-loading">
@@ -662,13 +671,13 @@ export function TeacherDashboard({
               <div className="empty-state">
                 <Sparkles size={22} />
                 <strong>Belum ada data analitik</strong>
-                <p>Analitik muncul setelah ada modul dan aktivitas siswa.</p>
+                <p>Analitik muncul setelah ada pertemuan dan aktivitas siswa.</p>
               </div>
             ) : (
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Modul</th>
+                    <th>Pertemuan</th>
                     <th>Aktivitas</th>
                     <th>Respons</th>
                     <th>Selesai</th>
@@ -698,7 +707,7 @@ export function TeacherDashboard({
             <div className="chart-panel__head">
               <div>
                 <strong>Progres penyelesaian</strong>
-                <small>Modul yang selesai per minggu</small>
+                <small>Pertemuan yang selesai per minggu</small>
               </div>
             </div>
             <ChartBars />
@@ -832,7 +841,7 @@ function ParticipantDetailModal({
         </div>
         <div className="participant-module-list">
           {rows.length === 0 ? (
-            <p className="section-subtitle">Belum ada modul yang bisa dianalisis.</p>
+            <p className="section-subtitle">Belum ada pertemuan yang bisa dianalisis.</p>
           ) : (
             rows.map((row) => (
               <div className="participant-module-row" key={row.module}>

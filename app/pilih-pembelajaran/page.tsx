@@ -87,7 +87,7 @@ export default function ChooseLearningPage() {
                 <p className="pilih-card__desc">{course.description}</p>
                 <div className="pilih-card__meta">
                   <span>
-                    <BookOpen size={12} /> {course.moduleCount} modul
+                    <BookOpen size={12} /> {course.moduleCount} pertemuan
                   </span>
                   <span>{course.blockCount} materi</span>
                   <span>{course.duration}</span>

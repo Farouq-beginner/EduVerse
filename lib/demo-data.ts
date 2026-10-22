@@ -13,8 +13,8 @@ export type LessonBlock = {
     text?: string;
     videoUrl?: string;
     driveUrl?: string;
+    /// Berkas materi guru (PDF/PPT/DOCX) — disimpan di database dan dibuka lewat /api/files/[id].
     pdfUrl?: string;
-    /// File PDF yang tersimpan di database (dilayani lewat /api/files/[id]).
     pdfFileId?: string;
     /// Blok bertipe Link: URL bebas + judul + deskripsi.
     linkUrl?: string;
@@ -22,30 +22,33 @@ export type LessonBlock = {
     linkDescription?: string;
     fileName?: string;
     fileMime?: string;
-    activity?: ActivityConfig;
+    /// Aktivitas: hanya visual interaktif pilihan guru (mini game yang tersedia).
+    activity?: ActivityVisualConfig;
     game?: GameBlockConfig;
+    /// Lembar kerja, jawaban & lampiran yang sama untuk semua tipe materi.
+    worksheet?: WorksheetConfig;
   };
 };
 
-export type ActivityConfig = {
-  templateId: "observing-questioning" | "guided-exploration" | "group-investigation" | "reflection";
-  prompt: string;
-  evidenceLabel: string;
-  responseType: "interactive" | "short-answer" | "essay" | "upload";
-  choices?: Array<{ label: string; value: string; correct?: boolean }>;
-  instructions: string;
-  points: number;
-  graded: boolean;
-  showScore: boolean;
-  rubric: string;
+export type ActivityVisualConfig = {
+  visualId: GameTemplateId;
 };
 
-export const activityTemplates: Array<{ id: ActivityConfig["templateId"]; title: string; prompt: string; evidenceLabel: string; responseType: ActivityConfig["responseType"] }> = [
-  { id: "observing-questioning", title: "Mengamati & Menanya · Suhu Berpendingin", prompt: "Amati kisah suhu −2°C yang naik 5°C lalu turun 4°C. Tulis 2 pertanyaan yang muncul dan jelaskan ke mana titik bergerak pada setiap langkah.", evidenceLabel: "2 pertanyaan awal atau foto garis bilangan −10 sampai 10", responseType: "short-answer" },
-  { id: "guided-exploration", title: "Eksplorasi Awal · Representasi Bilangan", prompt: "Kelompokkan −2, 5, 0, −7, dan 3 sebagai positif, negatif, atau nol. Jelaskan mengapa 0 tidak termasuk keduanya.", evidenceLabel: "Jawaban klasifikasi dan foto susunan kartu muatan", responseType: "upload" },
-  { id: "group-investigation", title: "Investigasi Kelompok · Kasus Freezer", prompt: "Freezer bersuhu −5°C, naik 3°C saat listrik padam, lalu turun 6°C setelah genset menyala. Tentukan suhu akhir dan jelaskan minimal satu strategi penyelesaian.", evidenceLabel: "Lembar kerja kelompok dan foto peragaan strategi", responseType: "essay" },
-  { id: "reflection", title: "Refleksi · Membandingkan Strategi", prompt: "Strategi mana yang paling efisien untuk operasi bilangan bulat? Bandingkan garis bilangan dan kartu muatan dengan alasan matematis.", evidenceLabel: "Refleksi tertulis dan satu tanggapan terhadap strategi teman", responseType: "essay" },
-];
+export type WorksheetConfig = {
+  /// Guru bisa mematikan lembar kerja untuk materi tertentu.
+  enabled: boolean;
+  /// Instruksi / isi lembar kerja yang dibaca siswa.
+  prompt: string;
+  answerLabel: string;
+  attachmentLabel: string;
+};
+
+export const blankWorksheet: WorksheetConfig = {
+  enabled: true,
+  prompt: "Kerjakan lembar kerja ini bersama kelompokmu, lalu simpan hasilnya.",
+  answerLabel: "Jawaban / kesimpulan",
+  attachmentLabel: "Lampiran jawaban (foto, PDF, PPT, atau DOCX)",
+};
 
 export type StudentSubmission = {
   id: string;

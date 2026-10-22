@@ -1,4 +1,4 @@
-import { defaultGameConfig, defaultGameStudioConfigs, demoCourse, type ActivityConfig, type GameConfig, type GameStudioConfig, type GameTemplateId, type LessonBlock, type Module, type Participant, type QuizDraft, type StudentSubmission } from "./demo-data";
+import { defaultGameConfig, defaultGameStudioConfigs, demoCourse, type GameConfig, type GameStudioConfig, type GameTemplateId, type LessonBlock, type Module, type Participant, type QuizDraft, type StudentSubmission } from "./demo-data";
 
 const keys = {
   theme: "eduverse-theme",
@@ -9,7 +9,6 @@ const keys = {
   brand: "eduverse-brand",
   courseBlocks: "eduverse-course-blocks",
   quizDraft: "eduverse-quiz-draft",
-  activityDrafts: "eduverse-activity-drafts",
   gameStudioConfigs: "eduverse-game-studio-configs",
   modules: "eduverse-course-modules",
   submissions: "eduverse-student-submissions",
@@ -221,27 +220,4 @@ export function getQuizDraft(blockId = "block-quiz"): QuizDraft {
 
 export function saveQuizDraft(draft: QuizDraft) {
   write(keys.quizDraft, draft);
-}
-
-const defaultActivity: ActivityConfig = {
-  templateId: "observing-questioning",
-  prompt: "Amati kisah suhu bilangan bulat, tulis dua pertanyaan, dan jelaskan arah gerak pada garis bilangan.",
-  evidenceLabel: "2 pertanyaan awal atau foto garis bilangan −10 sampai 10",
-  responseType: "interactive",
-  choices: [{ label: "A", value: "−8", correct: true }, { label: "B", value: "0" }, { label: "C", value: "8" }],
-  instructions: "Ikuti langkah aktivitas, tuliskan strategi yang kamu gunakan, lalu kirim jawaban untuk ditinjau guru.",
-  points: 10,
-  graded: true,
-  showScore: true,
-  rubric: "Strategi benar (5), proses terlihat (3), refleksi jelas (2).",
-};
-
-export function getActivityDraft(blockId: string): ActivityConfig {
-  const drafts = read<Record<string, ActivityConfig>>(keys.activityDrafts, {});
-  return drafts[blockId] ?? defaultActivity;
-}
-
-export function saveActivityDraft(blockId: string, config: ActivityConfig) {
-  const drafts = read<Record<string, ActivityConfig>>(keys.activityDrafts, {});
-  write(keys.activityDrafts, { ...drafts, [blockId]: config });
 }

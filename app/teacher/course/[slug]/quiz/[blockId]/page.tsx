@@ -157,7 +157,11 @@ export default function QuizBuilderPage() {
     });
     setSaving(false);
     if (res.ok) setFromDb(true);
-    setToast(res.ok ? "Kuis tersimpan di database. Siswa langsung memakai versi ini." : res.error ?? "Gagal menyimpan kuis.");
+    setToast(
+      res.ok
+        ? "Kuis tersimpan di draft. Siswa melihatnya setelah kamu menekan Publish di course builder."
+        : res.error ?? "Gagal menyimpan kuis."
+    );
   }
 
   if (loading) {
@@ -185,7 +189,10 @@ export default function QuizBuilderPage() {
               BUILDER KUIS · {draft.questions.length} SOAL
             </div>
             <h1>{draft.title}</h1>
-            <p>Bangun pertanyaan, kunci jawaban, pembahasan, dan aturan penilaian dalam satu halaman.</p>
+            <p>
+              Bangun pertanyaan, kunci jawaban, pembahasan, dan aturan penilaian dalam satu halaman. Perubahan
+              tersimpan di draft dan baru terlihat siswa setelah Publish.
+            </p>
           </div>
           <div className="page-topbar__actions">
             <Link href={`/learn/${params.slug}`} className="button button--ghost button--small">

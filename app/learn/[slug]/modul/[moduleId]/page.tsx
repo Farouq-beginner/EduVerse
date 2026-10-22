@@ -14,35 +14,31 @@ import {
   Gamepad2,
   Link2,
   Loader2,
-  Paperclip,
   Sparkles,
-  Trash2,
   Video,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { StatusPill } from "@/components/DashboardBits";
 import { Toast } from "@/components/Toast";
-import { NumberLineVisualizer } from "@/components/NumberLineVisualizer";
 import { DiscussionForum } from "@/components/DiscussionForum";
-import type { ActivityConfig, LessonBlock, Module } from "@/lib/demo-data";
+import { InteractiveVisual } from "@/components/InteractiveVisual";
+import { WorksheetForm } from "@/components/WorksheetForm";
+import type { LessonBlock, Module } from "@/lib/demo-data";
 import {
   getCompleted,
   getCourseBlocks,
   getCourseModules,
   getIdentity,
-  getSubmissions,
   saveCompleted,
   saveProgress,
-  saveSubmission,
 } from "@/lib/storage";
 import { getCourseStructure, getMyCourseProgress, getQuizForBlock, getSessionProfile, type DbCourse } from "@/lib/actions/dashboards";
-import { markBlockComplete, submitAssignment, submitQuizAttempt, syncBlockCompletions } from "@/lib/actions/progress";
-import { getMySubmission } from "@/lib/actions/files";
+import { markBlockComplete, submitQuizAttempt, syncBlockCompletions } from "@/lib/actions/progress";
 import { toModule } from "@/lib/course";
+import { fileKindLabel } from "@/lib/upload";
 
 type Identity = { name: string; className: string; participantId: string };
 type DbQuiz = Awaited<ReturnType<typeof getQuizForBlock>>;
-type UploadedFile = { url: string; fileName: string; fileType: string };
 
 const ACCENTS: Record<string, "violet" | "teal" | "yellow" | "coral"> = {
   "module-observe": "violet",
@@ -50,28 +46,6 @@ const ACCENTS: Record<string, "violet" | "teal" | "yellow" | "coral"> = {
   "module-investigate": "yellow",
   "module-present": "coral",
 };
-
-/** Unggah bukti jawaban ke database; mengembalikan URL yang bisa dibuka guru. */
-async function uploadAnswerFile(file: File, courseId: string): Promise<{ ok: boolean; file?: UploadedFile; error?: string }> {
-  if (!["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) {
-    return { ok: false, error: "Format harus PDF atau gambar." };
-  }
-  const limit = file.type === "application/pdf" ? 8 * 1024 * 1024 : 5 * 1024 * 1024;
-  if (file.size > limit) return { ok: false, error: `Ukuran maksimal ${Math.round(limit / 1024 / 1024)} MB.` };
-
-  try {
-    const form = new FormData();
-    form.append("file", file);
-    form.append("courseId", courseId);
-    form.append("purpose", "submission");
-    const response = await fetch("/api/files", { method: "POST", body: form });
-    const data = (await response.json()) as { ok?: boolean; url?: string; fileName?: string; mimeType?: string; error?: string };
-    if (!response.ok || !data.ok || !data.url) return { ok: false, error: data.error ?? "Gagal mengunggah berkas." };
-    return { ok: true, file: { url: data.url, fileName: data.fileName ?? file.name, fileType: data.mimeType ?? file.type } };
-  } catch {
-    return { ok: false, error: "Gagal mengunggah berkas." };
-  }
-}
 
 export default function ModulePage() {
   const params = useParams<{ slug: string; moduleId: string }>();
@@ -197,7 +171,7 @@ export default function ModulePage() {
         <div className="module-page module-page--empty">
           <div className="empty-state">
             <Loader2 size={24} className="spin" />
-            <strong>Memuat modul...</strong>
+            <strong>Memuat pembelajaran...</strong>
           </div>
         </div>
       </AppShell>
@@ -214,7 +188,7 @@ export default function ModulePage() {
           <div className="empty-state-card">
             <FileText size={28} />
             <h1>Pembelajaran tidak ditemukan</h1>
-            <p>Modul hanya bisa dibuka dari pembelajaran yang sudah dipublikasikan guru.</p>
+            <p>Pertemuan hanya bisa dibuka dari pembelajaran yang sudah dipublikasikan guru.</p>
           </div>
         </div>
       </AppShell>
@@ -230,8 +204,8 @@ export default function ModulePage() {
           </Link>
           <div className="empty-state-card">
             <Sparkles size={28} />
-            <h1>Masuk dulu untuk membuka modul</h1>
-            <p>Halaman modul ini mengikuti identitas dan progres siswa dari ruang belajar.</p>
+            <h1>Masuk dulu untuk membuka pertemuan</h1>
+            <p>Halaman pertemuan ini mengikuti identitas dan progres siswa dari ruang belajar.</p>
             <Link href={`/learn/${courseSlug}`} className="button button--primary">
               Masuk ke pembelajaran <ArrowRight size={16} />
             </Link>
@@ -246,12 +220,12 @@ export default function ModulePage() {
       <AppShell role="student">
         <div className="module-page module-page--empty">
           <Link href={`/learn/${courseSlug}`} className="back-link">
-            <ArrowLeft size={14} /> Semua modul
+            <ArrowLeft size={14} /> Semua pertemuan
           </Link>
           <div className="empty-state-card">
             <FileText size={26} />
-            <h1>Modul tidak ditemukan</h1>
-            <p>Modul ini mungkin sudah dihapus guru.</p>
+            <h1>Pertemuan tidak ditemukan</h1>
+            <p>Pertemuan ini mungkin sudah dihapus guru.</p>
           </div>
         </div>
       </AppShell>
@@ -268,7 +242,7 @@ export default function ModulePage() {
       <div className="module-page">
         <div className="module-page__top">
           <Link href={`/learn/${courseSlug}`} className="back-link">
-            <ArrowLeft size={14} /> Semua modul
+            <ArrowLeft size={14} /> Semua pertemuan
           </Link>
           <div className="module-page__identity">
             <span>{identityName}</span>
@@ -281,7 +255,7 @@ export default function ModulePage() {
         <div className={`module-hero module-hero--${accent}`}>
           <div>
             <div className="eyebrow">
-              {module.eyebrow || `MODUL ${String(moduleIndex + 1).padStart(2, "0")}`} · {(module.duration || "10 menit").toUpperCase()}
+              {module.eyebrow || `PERTEMUAN ${String(moduleIndex + 1).padStart(2, "0")}`} · {(module.duration || "10 menit").toUpperCase()}
             </div>
             <h1>{module.title}</h1>
             <p>
@@ -300,7 +274,7 @@ export default function ModulePage() {
 
         <div className="module-page__grid">
           <aside className="module-outline">
-            <div className="eyebrow">ISI MODUL</div>
+            <div className="eyebrow">ISI PERTEMUAN</div>
             {blocks.map((block, index) => (
               <button
                 key={block.id}
@@ -315,7 +289,7 @@ export default function ModulePage() {
                 {completed.includes(block.id) && <Check size={14} />}
               </button>
             ))}
-            {blocks.length === 0 && <p className="section-subtitle">Guru belum mengisi materi modul ini.</p>}
+            {blocks.length === 0 && <p className="section-subtitle">Guru belum mengisi materi pertemuan ini.</p>}
             <Link href={`/learn/${courseSlug}/games`} className="module-games-link">
               <Gamepad2 size={16} />
               <span>
@@ -329,6 +303,7 @@ export default function ModulePage() {
           <main className="module-viewer">
             {selected ? (
               <LessonRenderer
+                key={selected.id}
                 block={selected}
                 dbQuiz={dbQuiz}
                 courseId={courseId}
@@ -343,7 +318,7 @@ export default function ModulePage() {
               <div className="empty-state-card">
                 <FileText size={24} />
                 <h2>Belum ada materi</h2>
-                <p>Guru belum mengisi blok pada modul ini.</p>
+                <p>Guru belum mengisi blok pada pertemuan ini.</p>
               </div>
             )}
 
@@ -393,7 +368,8 @@ function LessonRenderer({
   onToast: (message: string) => void;
 }) {
   const material = block.material ?? {};
-  const [showNumberLine, setShowNumberLine] = useState(false);
+  const [showVisual, setShowVisual] = useState(false);
+  const worksheet = material.worksheet;
 
   return (
     <div>
@@ -401,18 +377,6 @@ function LessonRenderer({
         <div className="lesson-view">
           <LessonHeading icon={<Video size={18} />} block={block} />
           <MediaEmbed videoUrl={material.videoUrl} driveUrl={material.driveUrl} />
-          <div style={{ marginTop: 14 }}>
-            <button
-              type="button"
-              className="button button--ghost button--small"
-              onClick={() => setShowNumberLine(!showNumberLine)}
-              style={{ marginBottom: 12 }}
-            >
-              <Sparkles size={15} /> {showNumberLine ? "Tutup Visual Garis Bilangan" : "Buka Visual Garis Bilangan Interaktif"}
-            </button>
-            {showNumberLine && <NumberLineVisualizer />}
-          </div>
-          <CompleteButton onClick={onComplete} label="Video selesai" />
         </div>
       )}
 
@@ -437,7 +401,6 @@ function LessonRenderer({
               )}
             </div>
           </div>
-          <CompleteButton onClick={onComplete} label="Link sudah dibuka" />
         </div>
       )}
 
@@ -446,59 +409,41 @@ function LessonRenderer({
       )}
 
       {block.type === "activity" && (
-        <ActivityLesson
-          block={block}
-          config={block.material?.activity}
-          courseId={courseId}
-          enrolled={enrolled}
-          identity={identity}
-          onComplete={onComplete}
-          onToast={onToast}
-        />
+        <div className="lesson-view">
+          <LessonHeading icon={<Sparkles size={18} />} block={block} />
+          <div style={{ marginTop: 14 }}>
+            <button
+              type="button"
+              className="button button--ghost button--small"
+              onClick={() => setShowVisual((current) => !current)}
+              style={{ marginBottom: 12 }}
+            >
+              <Sparkles size={15} /> {showVisual ? "Tutup Visual" : "Buka Visual"}
+            </button>
+            {showVisual && (
+              <InteractiveVisual
+                visualId={material.activity?.visualId ?? "number-line-lab"}
+                onComplete={onComplete}
+              />
+            )}
+          </div>
+        </div>
       )}
 
       {block.type === "game" && (
-        (() => {
-          const gameId = material.game?.gameId;
-          if (gameId === "number-line-lab") {
-            return (
-              <div className="lesson-view">
-                <LessonHeading icon={<Gamepad2 size={18} />} block={block} />
-                <NumberLineVisualizer title={block.title || "Laboratorium Garis Bilangan Interaktif"} description={material.game?.instructions || block.description} />
-                <CompleteButton onClick={onComplete} label="Aktivitas Lab selesai" />
-              </div>
-            );
-          }
-          const gameRoute = gameId === "charge-cards" ? "block-cards" : gameId === "number-line" ? "block-number-line" : "block-game";
-          return (
-            <div className="lesson-view">
-              <LessonHeading icon={<Gamepad2 size={18} />} block={block} />
-              <div className="game-lesson-card">
-                <div className="game-lesson-card__art">{gameId === "charge-cards" ? "±" : gameId === "number-line" ? "↔" : "✦"}</div>
-                <div>
-                  <h2>{block.title}</h2>
-                  <p>{material.game?.instructions || block.description}</p>
-                  <Link href={`/learn/${courseSlug}/games?game=${gameRoute}`} className="button button--primary">
-                    <Gamepad2 size={16} /> Buka game ini
-                  </Link>
-                </div>
-              </div>
-              <CompleteButton onClick={onComplete} label="Game selesai" />
+        <div className="lesson-view">
+          <LessonHeading icon={<Gamepad2 size={18} />} block={block} />
+          <div className="game-lesson-card">
+            <div className="game-lesson-card__art">{material.game?.gameId === "charge-cards" ? "±" : material.game?.gameId === "number-line" ? "↔" : "✦"}</div>
+            <div>
+              <h2>{block.title}</h2>
+              <p>{material.game?.instructions || block.description}</p>
+              <Link href={`/learn/${courseSlug}/games`} className="button button--primary">
+                <Gamepad2 size={16} /> Buka game ini
+              </Link>
             </div>
-          );
-        })()
-      )}
-
-      {block.type === "assignment" && (
-        <AssignmentLesson
-          block={block}
-          courseId={courseId}
-          enrolled={enrolled}
-          account={account}
-          identity={identity}
-          onComplete={onComplete}
-          onToast={onToast}
-        />
+          </div>
+        </div>
       )}
 
       {block.type === "text" && (
@@ -507,35 +452,48 @@ function LessonRenderer({
           {material.text ? (
             <div className="rich-material">
               <p>{material.text}</p>
-              <div className="material-tip">
-                <Sparkles size={15} /> Amati pergerakan pada garis bilangan interaktif di bawah ini untuk memperkuat pemahaman tandamu.
-              </div>
             </div>
           ) : (
             <div className="material-empty">
               <FileText size={24} />
               <strong>Materi teks belum diisi</strong>
-              <span>Guru dapat mengisi isi teks dari editor blok.</span>
+              <span>Guru dapat mengisi isi teks dari editor materi.</span>
             </div>
           )}
-          <NumberLineVisualizer
-            title="Eksplorasi Garis Bilangan: Tanda Positif & Negatif"
-            description="Coba geser angka awal dan langkah gerak untuk melihat perpindahan titik secara langsung."
-          />
-          <CompleteButton onClick={onComplete} label="Materi selesai" />
         </div>
       )}
 
-      {block.type === "reflection" && (
-        <ReflectionLesson
-          block={block}
-          courseId={courseId}
-          enrolled={enrolled}
-          account={account}
-          onComplete={onComplete}
-          onToast={onToast}
+      {(block.type === "assignment" || block.type === "reflection") && (
+        <div className="lesson-view">
+          <LessonHeading icon={<FileText size={18} />} block={block} />
+          {material.text && (
+            <div className="rich-material">
+              <p>{material.text}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Berkas materi berlaku untuk semua tipe: PDF, PPT, DOCX, atau gambar. */}
+      {material.pdfUrl && (
+        <MaterialFile
+          url={material.pdfUrl}
+          fileName={material.fileName}
+          mime={material.fileMime}
         />
       )}
+
+      <WorksheetForm
+        block={block}
+        worksheet={worksheet}
+        courseId={courseId}
+        enrolled={enrolled}
+        identity={account ? { name: account.fullName, className: account.className, participantId: account.id } : identity}
+        onSubmitted={onComplete}
+        onToast={onToast}
+      />
+
+      {worksheet?.enabled === false && <CompleteButton onClick={onComplete} label="Materi selesai" />}
     </div>
   );
 }
@@ -562,488 +520,42 @@ function CompleteButton({ onClick, label }: { onClick: () => void; label: string
   );
 }
 
-function useExistingSubmission(courseId: string | null, blockId: string, identity: Identity | null) {
-  const [response, setResponse] = useState("");
-  const [file, setFile] = useState<UploadedFile | null>(null);
-  const [submittedAt, setSubmittedAt] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    if (courseId) {
-      getMySubmission(courseId, blockId).then((row) => {
-        if (!active || !row) return;
-        setResponse(row.response ?? "");
-        if (row.fileUrl) {
-          setFile({ url: row.fileUrl, fileName: row.fileName ?? "Lampiran", fileType: row.fileType ?? "application/pdf" });
-        }
-        setSubmittedAt(row.submittedAt);
-      });
-    } else if (identity) {
-      const local = getSubmissions().find(
-        (item) => item.participantId === identity.participantId && item.blockId === blockId
-      );
-      if (local) {
-        setResponse(local.response);
-        setSubmittedAt(local.submittedAt);
-      }
-    }
-    return () => {
-      active = false;
-    };
-    // Cukup id peserta sebagai dependency agar objek identitas baru tidak memicu loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId, blockId, identity?.participantId]);
-
-  return { response, setResponse, file, setFile, submittedAt, setSubmittedAt };
-}
-
-function ActivityLesson({
-  block,
-  config,
-  courseId,
-  enrolled,
-  identity,
-  onComplete,
-  onToast,
-}: {
-  block: LessonBlock;
-  config?: ActivityConfig;
-  courseId: string | null;
-  enrolled: boolean;
-  identity: Identity | null;
-  onComplete: () => void;
-  onToast: (message: string) => void;
-}) {
-  const fallback: ActivityConfig = {
-    templateId: "observing-questioning",
-    prompt: "Amati masalah bilangan bulat dan tulis strategi penyelesaianmu.",
-    evidenceLabel: "Jawaban tertulis",
-    responseType: "short-answer",
-    instructions: "Kerjakan dengan langkah yang runtut.",
-    points: 10,
-    graded: true,
-    showScore: true,
-    rubric: "Proses dan alasan matematis.",
-  };
-  const activity = config ?? fallback;
-  const { response, setResponse, file, setFile, submittedAt, setSubmittedAt } = useExistingSubmission(courseId, block.id, identity);
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [showScore, setShowScore] = useState(false);
-
-  const selectedChoice = activity.choices?.find((choice) => choice.value === response);
-  const score = activity.responseType === "interactive" ? (selectedChoice?.correct ? activity.points : 0) : null;
-  const needsAnswer =
-    activity.responseType === "interactive"
-      ? !response
-      : activity.responseType === "upload"
-        ? !file && !response.trim()
-        : !response.trim();
-
-  async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const selected = event.target.files?.[0];
-    event.target.value = "";
-    if (!selected) return;
-    if (!courseId || !enrolled) {
-      onToast("Login sebagai siswa dan gabung pembelajaran agar lampiran tersimpan di database.");
-      return;
-    }
-    setUploading(true);
-    const result = await uploadAnswerFile(selected, courseId);
-    setUploading(false);
-    if (!result.ok || !result.file) {
-      onToast(result.error ?? "Gagal mengunggah berkas.");
-      return;
-    }
-    setFile(result.file);
-    onToast("Lampiran tersimpan di database.");
-  }
-
-  async function submit() {
-    if (needsAnswer) return;
-    setSaving(true);
-    const now = new Date().toISOString();
-
-    if (courseId && enrolled && identity) {
-      const res = await submitAssignment({
-        courseId,
-        blockId: block.id,
-        response,
-        fileUrl: file?.url,
-        fileName: file?.fileName,
-        fileType: file?.fileType,
-      });
-      setSaving(false);
-      if (!res.ok) {
-        onToast(res.error ?? "Gagal menyimpan jawaban.");
-        return;
-      }
-      onToast("Jawaban terkirim ke guru dan tersimpan di database.");
-    } else if (identity) {
-      saveSubmission({
-        id: `${identity.participantId}-${block.id}`,
-        participantId: identity.participantId,
-        participantName: identity.name,
-        className: identity.className,
-        blockId: block.id,
-        blockTitle: block.title,
-        moduleId: block.moduleId,
-        response,
-        score,
-        maxScore: activity.points,
-        submittedAt: now,
-        status: "submitted",
-      });
-      setSaving(false);
-      onToast("Jawaban tersimpan di perangkat.");
-    }
-
-    setSubmittedAt(now);
-    setShowScore(true);
-  }
-
-  return (
-    <div className="lesson-view">
-      <LessonHeading icon={<Sparkles size={18} />} block={block} />
-      <div className="activity-lesson-card answer-panel">
-        <div className="eyebrow">AKTIVITAS FPBL · {activity.templateId.replaceAll("-", " ").toUpperCase()}</div>
-        <h2>{activity.prompt}</h2>
-
-        <div className="form-grid">
-          <div className="field field--full">
-            <label>Instruksi aktivitas</label>
-            <div className="field-static">{activity.instructions}</div>
-          </div>
-          <div className="field field--full">
-            <label>Bukti yang dikumpulkan</label>
-            <div className="field-static">{activity.evidenceLabel}</div>
-          </div>
-          <div className="field field--full">
-            <label>Rubrik penilaian</label>
-            <div className="field-static">{activity.rubric}</div>
-          </div>
-          {activity.responseType === "interactive" ? (
-            <div className="field field--full">
-              <label>Pilih satu jawaban</label>
-              <div className="activity-choice-list">
-                {(activity.choices?.length
-                  ? activity.choices
-                  : [
-                      { label: "A", value: "Ya" },
-                      { label: "B", value: "Tidak" },
-                      { label: "C", value: "Belum yakin" },
-                    ]
-                ).map((choice) => (
-                  <button
-                    key={choice.label}
-                    className={`activity-choice ${response === choice.value ? "is-selected" : ""}`}
-                    onClick={() => setResponse(choice.value)}
-                    disabled={Boolean(submittedAt)}
-                  >
-                    <strong>{choice.label}</strong>
-                    <span>{choice.value}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <>
-              {activity.responseType === "upload" && (
-                <div className="field field--full">
-                  <label>Upload bukti (gambar atau PDF)</label>
-                  <label className="file-upload-zone">
-                    <input type="file" accept="image/*,application/pdf" onChange={handleUpload} disabled={uploading || Boolean(submittedAt)} />
-                    <Paperclip size={16} />
-                    <span>{uploading ? "Mengunggah..." : "Pilih gambar atau PDF"}</span>
-                  </label>
-                  {file && (
-                    <div className="file-chip-row">
-                      <a href={file.url} target="_blank" rel="noreferrer" className="file-chip">
-                        <FileText size={14} /> {file.fileName}
-                      </a>
-                      {!submittedAt && (
-                        <button type="button" className="button button--ghost button--small" onClick={() => setFile(null)}>
-                          <Trash2 size={13} /> Hapus
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="field field--full">
-                <label>Jawabanmu</label>
-                <textarea
-                  className="material-textarea"
-                  value={response}
-                  onChange={(event) => setResponse(event.target.value)}
-                  placeholder={activity.responseType === "essay" ? "Tulis penjelasan dan strategi kelompokmu..." : "Tulis jawabanmu..."}
-                  rows={6}
-                  disabled={Boolean(submittedAt)}
-                />
-                <small className="field-helper">{response.trim().length} karakter</small>
-              </div>
-            </>
-          )}
+function MaterialFile({ url, fileName, mime }: { url: string; fileName?: string; mime?: string }) {
+  const label = fileKindLabel(mime, fileName);
+  if (mime?.startsWith("image/")) {
+    return (
+      <div className="attachment-preview" style={{ marginTop: 16 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt={fileName || "Berkas materi"} />
+        <div className="file-chip-row">
+          <a href={url} target="_blank" rel="noreferrer" className="file-chip">
+            <FileText size={14} /> {fileName || "Berkas materi"}
+          </a>
         </div>
-
-        {!submittedAt ? (
-          <button className="button button--primary" disabled={saving || uploading || needsAnswer} onClick={submit} style={{ marginTop: 14 }}>
-            {saving ? <Loader2 size={16} className="spin" /> : <Check size={16} />} Kirim jawaban
-          </button>
-        ) : (
-          <div className="preview-result is-good" style={{ marginTop: 14 }}>
-            <Check size={15} /> Jawaban terkirim pada {new Date(submittedAt).toLocaleString("id-ID")}.{" "}
-            {showScore && activity.showScore && activity.responseType === "interactive"
-              ? `Skor: ${score}/${activity.points}.`
-              : "Menunggu peninjauan guru."}
-          </div>
-        )}
       </div>
-      {submittedAt && <CompleteButton onClick={onComplete} label="Aktivitas selesai" />}
-    </div>
-  );
-}
-
-function ReflectionLesson({
-  block,
-  courseId,
-  enrolled,
-  account,
-  onComplete,
-  onToast,
-}: {
-  block: LessonBlock;
-  courseId: string | null;
-  enrolled: boolean;
-  account: { id: string; fullName: string; className: string } | null;
-  onComplete: () => void;
-  onToast: (message: string) => void;
-}) {
-  const identity = account ? { name: account.fullName, className: account.className, participantId: account.id } : null;
-  const { response, setResponse, submittedAt, setSubmittedAt } = useExistingSubmission(courseId, block.id, identity);
-  const [saving, setSaving] = useState(false);
-
-  async function submit() {
-    if (!response.trim()) return;
-    setSaving(true);
-    if (courseId && enrolled) {
-      const res = await submitAssignment({ courseId, blockId: block.id, response });
-      setSaving(false);
-      if (!res.ok) {
-        onToast(res.error ?? "Gagal menyimpan refleksi.");
-        return;
-      }
-      onToast("Refleksi tersimpan di database.");
-    } else {
-      setSaving(false);
-      onToast("Refleksi tersimpan di perangkat.");
-    }
-    setSubmittedAt(new Date().toISOString());
+    );
   }
-
+  if (!mime || mime === "application/pdf") {
+    return <PdfViewer url={url} fileName={fileName} />;
+  }
   return (
-    <div className="lesson-view">
-      <LessonHeading icon={<Sparkles size={18} />} block={block} />
-      <div className="activity-lesson-card answer-panel">
-        <div className="eyebrow">REFLEKSI STRATEGI PEMBELAJARAN</div>
-        <h2>{block.title}</h2>
-        <p>{block.material?.text || block.description}</p>
-        <div className="form-grid">
-          <div className="field field--full">
-            <label>Refleksimu</label>
-            <textarea
-              className="material-textarea"
-              placeholder="Tulis refleksimu di sini..."
-              value={response}
-              onChange={(event) => setResponse(event.target.value)}
-              rows={5}
-              disabled={Boolean(submittedAt)}
-            />
-          </div>
+    <div className="pdf-viewer" style={{ marginTop: 16 }}>
+      <div className="pdf-viewer__head">
+        <span>
+          <FileText size={17} /> {fileName || `Berkas ${label}`}
+        </span>
+        <div style={{ display: "flex", gap: 8 }}>
+          <a href={url} target="_blank" rel="noreferrer" className="button button--primary button--small">
+            <ExternalLink size={14} /> Lihat {label}
+          </a>
+          <a href={url} download={fileName || `materi.${label.toLowerCase()}`} className="button button--ghost button--small">
+            <Download size={14} /> Unduh
+          </a>
         </div>
-        {!submittedAt ? (
-          <button className="button button--primary" onClick={submit} disabled={saving || !response.trim()} style={{ marginTop: 14 }}>
-            {saving ? <Loader2 size={16} className="spin" /> : <Check size={16} />} Simpan refleksi
-          </button>
-        ) : (
-          <div className="preview-result is-good" style={{ marginTop: 14 }}>
-            <Check size={15} /> Refleksi tersimpan. Terima kasih!
-          </div>
-        )}
       </div>
-      {submittedAt && <CompleteButton onClick={onComplete} label="Materi selesai" />}
-    </div>
-  );
-}
-
-function AssignmentLesson({
-  block,
-  courseId,
-  enrolled,
-  account,
-  identity,
-  onComplete,
-  onToast,
-}: {
-  block: LessonBlock;
-  courseId: string | null;
-  enrolled: boolean;
-  account: { id: string; fullName: string; className: string } | null;
-  identity: Identity | null;
-  onComplete: () => void;
-  onToast: (message: string) => void;
-}) {
-  const activeIdentity = account
-    ? { name: account.fullName, className: account.className, participantId: account.id }
-    : identity;
-  const { response, setResponse, file, setFile, submittedAt, setSubmittedAt } = useExistingSubmission(courseId, block.id, activeIdentity);
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const pdfUrl = block.material?.pdfUrl;
-
-  async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const selected = event.target.files?.[0];
-    event.target.value = "";
-    if (!selected) return;
-    if (!courseId || !enrolled) {
-      onToast("Login sebagai siswa dan gabung pembelajaran agar jawaban tersimpan di database.");
-      return;
-    }
-    setUploading(true);
-    const result = await uploadAnswerFile(selected, courseId);
-    setUploading(false);
-    if (!result.ok || !result.file) {
-      onToast(result.error ?? "Gagal mengunggah berkas.");
-      return;
-    }
-    setFile(result.file);
-    onToast("Lampiran jawaban tersimpan di database.");
-  }
-
-  async function submit() {
-    if (!response.trim() && !file) return;
-    setSaving(true);
-    const now = new Date().toISOString();
-
-    if (courseId && enrolled && activeIdentity) {
-      const res = await submitAssignment({
-        courseId,
-        blockId: block.id,
-        response,
-        fileUrl: file?.url,
-        fileName: file?.fileName,
-        fileType: file?.fileType,
-      });
-      setSaving(false);
-      if (!res.ok) {
-        onToast(res.error ?? "Gagal menyimpan jawaban.");
-        return;
-      }
-      onToast("Tugas dan lampiran jawaban tersimpan di database.");
-    } else if (activeIdentity) {
-      saveSubmission({
-        id: `${activeIdentity.participantId}-${block.id}`,
-        participantId: activeIdentity.participantId,
-        participantName: activeIdentity.name,
-        className: activeIdentity.className,
-        blockId: block.id,
-        blockTitle: block.title,
-        moduleId: block.moduleId,
-        response,
-        score: null,
-        maxScore: 20,
-        submittedAt: now,
-        status: "submitted",
-      });
-      setSaving(false);
-      onToast("Jawaban tersimpan di perangkat.");
-    }
-
-    setSubmittedAt(now);
-  }
-
-  const imageFile = file && file.fileType.startsWith("image/");
-
-  return (
-    <div className="lesson-view">
-      <LessonHeading icon={<FileText size={18} />} block={block} />
-      {pdfUrl ? (
-        <PdfViewer url={pdfUrl} fileName={block.material?.fileName} />
-      ) : (
-        <div className="material-empty">
-          <FileText size={24} />
-          <strong>E-LKPD</strong>
-          <span>Guru belum melampirkan PDF untuk tugas ini.</span>
-        </div>
-      )}
-      {block.material?.text && (
-        <div className="rich-material" style={{ borderLeft: "4px solid var(--teal)", marginTop: 14 }}>
-          <h4 style={{ margin: "0 0 8px", fontSize: "0.95rem", color: "var(--teal)" }}>📖 Kasus Soal Cerita</h4>
-          <p>{block.material.text}</p>
-        </div>
-      )}
-
-      <div className="activity-lesson-card answer-panel">
-        <div className="eyebrow">LEMBAR KERJA · JAWABAN & LAMPIRAN</div>
-        <div className="form-grid">
-          <div className="field field--full">
-            <label>Keterangan / kesimpulan perhitungan</label>
-            <textarea
-              className="material-textarea"
-              value={response}
-              onChange={(event) => setResponse(event.target.value)}
-              placeholder="Tuliskan hasil akhir dan alasan mengapa hasilnya bernilai positif/negatif..."
-              rows={4}
-              disabled={Boolean(submittedAt)}
-            />
-          </div>
-          <div className="field field--full">
-            <label>Lampiran jawaban (foto atau PDF)</label>
-            <label className="file-upload-zone">
-              <input type="file" accept="image/*,application/pdf" onChange={handleUpload} disabled={uploading || Boolean(submittedAt)} />
-              <Paperclip size={16} />
-              <span>{uploading ? "Mengunggah..." : "Pilih foto lembar kerja atau PDF"}</span>
-            </label>
-            <small className="field-helper">Foto JPG/PNG atau PDF, maksimal 5–8 MB.</small>
-            {file && (
-              <div className="attachment-preview">
-                {imageFile ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={file.url} alt={file.fileName} />
-                ) : null}
-                <div className="file-chip-row">
-                  <a href={file.url} target="_blank" rel="noreferrer" className="file-chip">
-                    <FileText size={14} /> {file.fileName}
-                  </a>
-                  {!submittedAt && (
-                    <button type="button" className="button button--ghost button--small" onClick={() => setFile(null)}>
-                      <Trash2 size={13} /> Hapus lampiran
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <button
-          className="button button--primary"
-          style={{ marginTop: 14 }}
-          disabled={saving || uploading || (!response.trim() && !file) || Boolean(submittedAt)}
-          onClick={submit}
-        >
-          {saving ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
-          {submittedAt ? "Tugas terkirim" : "Kirim jawaban & lampiran"}
-        </button>
-
-        {submittedAt && (
-          <div className="preview-result is-good" style={{ marginTop: 12 }}>
-            <Check size={15} /> Tugas terkirim pada {new Date(submittedAt).toLocaleString("id-ID")}. Menunggu peninjauan guru.
-          </div>
-        )}
-      </div>
-
-      {submittedAt && <CompleteButton onClick={onComplete} label="Tugas selesai" />}
+      <p style={{ marginTop: 10, color: "var(--muted)", fontSize: "0.78rem" }}>
+        Berkas {label} tidak bisa dipratinjau di browser. Buka di tab baru atau unduh untuk membacanya.
+      </p>
     </div>
   );
 }
@@ -1056,7 +568,7 @@ function MediaEmbed({ videoUrl, driveUrl }: { videoUrl?: string; driveUrl?: stri
       <div className="material-empty">
         <Video size={24} />
         <strong>Video belum ditambahkan</strong>
-        <span>Guru dapat memasukkan link YouTube atau Google Drive di editor blok.</span>
+        <span>Guru dapat memasukkan link YouTube atau Google Drive di editor materi.</span>
       </div>
     );
   const embed = videoUrl ? youtubeEmbed(url) : driveEmbed(url);
@@ -1173,8 +685,8 @@ function QuizLesson({
         <LessonHeading icon={<ClipboardCheck size={18} />} block={block} />
         <div className="empty-state-card">
           <ClipboardCheck size={26} />
-          <h2>Kuis belum tersedia di database</h2>
-          <p>Sedang dimuat. Silakan muat ulang halaman.</p>
+          <h2>Kuis belum tersedia</h2>
+          <p>Guru belum mempublikasikan kuis ini. Coba muat ulang halaman.</p>
         </div>
       </div>
     );
