@@ -1767,3 +1767,11 @@ h3 { font-size: 1.05rem; line-height: 1.25; }
 
 /* Baris atas form auth: merek di kiri, tombol tema di kanan. */
 .auth-form-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* Aksi cepat layar kecil: blok preferensi sidebar disembunyikan di mobile,
+   jadi tombol tema dan keluar dipindah ke baris merek. */
+.mobile-actions { display: none; align-items: center; gap: 6px; margin-left: auto; }
+@media (max-width: 720px) {
+  .sidebar__brand { display: flex; align-items: center; gap: 8px; }
+  .mobile-actions { display: flex; }
+}

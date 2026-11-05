@@ -96,6 +96,9 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
             <button className="icon-button" onClick={toggleTheme} aria-label="Ganti tema">
               {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </button>
+            <button className="icon-button" onClick={handleLogout} aria-label="Keluar" title="Keluar">
+              <LogOut size={18} />
+            </button>
           </div>
         </div>
         {children}
@@ -121,7 +124,7 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
       <RouteProgress />
       <SessionGuard />
       <aside className="sidebar">
-        <div className="sidebar__brand"><BrandMark /><span className="demo-badge">DEMO</span></div>
+        <div className="sidebar__brand"><BrandMark /><span className="demo-badge">DEMO</span><div className="mobile-actions"><button className="icon-button" onClick={toggleTheme} aria-label={theme === "dark" ? "Aktifkan light mode" : "Aktifkan dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"}>{theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}</button><button className="icon-button" onClick={handleLogout} aria-label="Keluar" title="Keluar"><LogOut size={16} /></button></div></div>
         <div className="workspace-switcher"><div className="workspace-avatar">{initials}</div><div><strong>{account ? account.fullName : profileLoaded ? "Akun guru" : "Memuat profil..."}</strong><small>{account ? roleLabel : "Sinkron akun"}</small></div><ChevronDown size={15} /></div>
         <div className="sidebar__label">WORKSPACE</div>
         <nav className="sidebar__nav" aria-label="Navigasi utama">
