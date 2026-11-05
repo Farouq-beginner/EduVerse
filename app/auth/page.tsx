@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, BookOpen, GraduationCap, Link2, Loader2, UsersRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, GraduationCap, Loader2, UsersRound } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
 import { Toast } from "@/components/Toast";
 import { loginUser, registerUser } from "@/lib/actions/auth";
@@ -52,6 +52,15 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState("");
 
+  // Pesan ketika sesi diakhiri otomatis (idle atau database bermasalah).
+  useEffect(() => {
+    const reason = new URLSearchParams(window.location.search).get("reason");
+    if (reason === "idle")
+      setToast("Sesi berakhir karena tidak ada aktivitas dalam waktu lama. Silakan masuk lagi.");
+    else if (reason === "database")
+      setToast("Sesi diakhiri karena database bermasalah. Coba masuk lagi setelah beberapa saat.");
+  }, []);
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (loading) return;
@@ -85,10 +94,16 @@ export default function AuthPage() {
       // router.replace (bukan push) supaya halaman login tidak tertinggal di
       // riwayat browser — tombol "kembali" tidak lagi memunculkan form login.
       const dest = resolveDestination(result.role);
+      // Cukup replace: tujuan sudah dirender server, router.refresh() hanya
+      // menambah satu round-trip penuh sehingga workspace terasa lambat dibuka.
       router.replace(dest);
-      router.refresh();
-    } catch {
-      setToast("Koneksi bermasalah. Coba lagi.");
+    } catch (error) {
+      // Tampilkan penyebab sebenarnya, bukan pesan generik "koneksi bermasalah".
+      setToast(
+        error instanceof Error
+          ? `Koneksi bermasalah: ${error.message}`
+          : "Koneksi bermasalah. Coba lagi."
+      );
     } finally {
       setLoading(false);
     }
@@ -139,23 +154,9 @@ export default function AuthPage() {
           >
             <BookOpen size={18} /> Guru
           </button>
-          <button
-            className="auth-role"
-            onClick={() => setRole(role === "TEACHER" ? "STUDENT" : "TEACHER")}
-            type="button"
-            title="Beralih peran"
-          >
-            <Link2 size={14} />
-          </button>
         </div>
 
         <form className="auth-form" onSubmit={submit}>
-          {mode === "register" && role === "STUDENT" && (
-            <div className="field">
-              <label>Nama lengkap</label>
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Contoh: Alya Pramesti" />
-            </div>
-          )}
           {mode === "register" && (
             <div className="field">
               <label>Nama lengkap</label>
@@ -224,12 +225,15 @@ export default function AuthPage() {
                   const res = await loginUser({ email: "guru@eduverse.id", password: "GuruEduVerse123!" });
                   if (res.ok) {
                     router.replace(resolveDestination(res.role));
-                    router.refresh();
                   } else {
                     setToast(res.error || "Gagal masuk.");
                   }
-                } catch {
-                  setToast("Koneksi bermasalah.");
+                } catch (error) {
+                  setToast(
+                    error instanceof Error
+                      ? `Koneksi bermasalah: ${error.message}`
+                      : "Koneksi bermasalah."
+                  );
                 } finally {
                   setLoading(false);
                 }
@@ -256,12 +260,15 @@ export default function AuthPage() {
                   const res = await loginUser({ email: "siswa@eduverse.id", password: "SiswaEduVerse123!" });
                   if (res.ok) {
                     router.replace(resolveDestination(res.role));
-                    router.refresh();
                   } else {
                     setToast(res.error || "Gagal masuk.");
                   }
-                } catch {
-                  setToast("Koneksi bermasalah.");
+                } catch (error) {
+                  setToast(
+                    error instanceof Error
+                      ? `Koneksi bermasalah: ${error.message}`
+                      : "Koneksi bermasalah."
+                  );
                 } finally {
                   setLoading(false);
                 }

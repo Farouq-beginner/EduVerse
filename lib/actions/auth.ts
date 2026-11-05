@@ -113,9 +113,37 @@ export async function registerUser(input: {
   return { ok: true, role };
 }
 
+/** Pesan jelas saat konfigurasi server belum terbaca (bukan "koneksi bermasalah"). */
+function missingConfigMessage(): string | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    return "Server belum dikonfigurasi: SUPABASE_URL / SUPABASE_ANON_KEY tidak terbaca. Isi .env lokal (atau Environment Variables di Vercel), lalu restart server.";
+  }
+  return null;
+}
+
+/** Terjemahkan kegagalan teknis menjadi pesan yang bisa ditindaklanjuti. */
+function describeAuthFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const placeholder =
+    /^\[?SENSITIVE\]?$/i.test((process.env.SUPABASE_URL ?? "").trim()) ||
+    /^\[?SENSITIVE\]?$/i.test((process.env.DATABASE_URL ?? "").trim());
+  if (placeholder)
+    return "Nilai env masih placeholder [SENSITIVE] dari vercel env pull. Salin nilai asli Supabase URL, anon key, service role, dan DATABASE_URL ke .env.local, lalu restart server.";
+  if (/supabaseUrl|supabaseKey|is required/i.test(message))
+    return "Server belum dikonfigurasi: URL atau anon key Supabase kosong.";
+  if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network|timeout|abort/i.test(message))
+    return "Server tidak bisa menghubungi Supabase (jaringan/DNS). Periksa koneksi server, lalu coba lagi.";
+  return `Login gagal: ${message}`;
+}
+
 /**
  * Login untuk ketiga role. Memverifikasi kredensial lewat Supabase Auth,
  * lalu membaca role & status aktif dari tabel profiles.
+ *
+ * Tidak pernah melempar error ke client: kegagalan konfigurasi/jaringan
+ * dikembalikan sebagai pesan agar UI tidak hanya menampilkan "koneksi bermasalah".
  */
 export async function loginUser(input: {
   email: string;
@@ -125,42 +153,62 @@ export async function loginUser(input: {
   if (!email.includes("@")) return { ok: false, error: "Email tidak valid." };
   if (!password) return { ok: false, error: "Password wajib diisi." };
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const configError = missingConfigMessage();
+  if (configError) return { ok: false, error: configError };
 
-  if (error) {
-    if (/invalid login credentials/i.test(error.message))
-      return { ok: false, error: "Email atau password salah." };
-    // Supabase mengembalikan error ini bila email belum dikonfirmasi.
-    if (/email not confirmed/i.test(error.message))
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      if (/invalid login credentials/i.test(error.message))
+        return { ok: false, error: "Email atau password salah." };
+      // Supabase mengembalikan error ini bila email belum dikonfirmasi.
+      if (/email not confirmed/i.test(error.message))
+        return {
+          ok: false,
+          error:
+            "Email belum dikonfirmasi. Cek inbox kamu dan klik link verifikasi, lalu coba login lagi.",
+        };
+      return { ok: false, error: `Supabase menolak login: ${error.message}` };
+    }
+
+    const user = data.user;
+    if (!user) return { ok: false, error: "Login gagal: sesi tidak dibuat. Coba lagi." };
+
+    let profile;
+    try {
+      profile = await prisma.profile.findUnique({ where: { id: user.id } });
+    } catch {
       return {
         ok: false,
         error:
-          "Email belum dikonfirmasi. Cek inbox kamu dan klik link verifikasi, lalu coba login lagi.",
+          "Autentikasi berhasil, tetapi database profil tidak bisa dibaca. Periksa DATABASE_URL di server.",
       };
-    return { ok: false, error: error.message };
+    }
+
+    if (!profile) return { ok: false, error: "Profil tidak ditemukan. Hubungi admin." };
+    if (!profile.isActive)
+      return { ok: false, error: "Akun dinonaktifkan. Hubungi admin." };
+
+    await prisma.profile
+      .update({ where: { id: user.id }, data: { lastActive: new Date() } })
+      .catch(() => undefined);
+
+    return { ok: true, role: profile.role };
+  } catch (error) {
+    return { ok: false, error: describeAuthFailure(error) };
   }
-
-  const user = data.user;
-  if (!user) return { ok: false, error: "Login gagal. Coba lagi." };
-
-  const profile = await prisma.profile.findUnique({ where: { id: user.id } });
-  if (!profile) return { ok: false, error: "Profil tidak ditemukan. Hubungi admin." };
-  if (!profile.isActive)
-    return { ok: false, error: "Akun dinonaktifkan. Hubungi admin." };
-
-  await prisma.profile.update({
-    where: { id: user.id },
-    data: { lastActive: new Date() },
-  });
-
-  return { ok: true, role: profile.role };
 }
 
-/** Logout — menghapus sesi Supabase. */
+/** Logout — menghapus sesi Supabase (aman walau sesi/env sudah tidak ada). */
 export async function logoutUser() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  try {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+  } catch {
+    // Tidak perlu menghentikan navigasi keluar bila server sesi sudah tidak aktif.
+  }
 }
 
 /**

@@ -6,3 +6,8 @@ out
 .env.*
 .DS_Store
 .freebuff
+# log server lokal
+dev.log
+
+.vercel
+.env*
