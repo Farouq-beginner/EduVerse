@@ -35,6 +35,8 @@ import {
   type TeacherActivityRow,
   type TeacherCourseCard,
 } from "@/lib/actions/dashboards";
+import { getCourseRevisionById } from "@/lib/actions/sync";
+import { loadWithCache, sharedPing } from "@/lib/client-cache";
 
 type Stats = {
   courseCount: number;
@@ -106,7 +108,11 @@ export function TeacherDashboard({
     setParticipantsLoading(true);
     setStructureLoading(true);      (async () => {
       try {
-        const workspace = await getTeacherWorkspace(selectedCourse.id, selectedCourse.slug);
+        const workspace = await loadWithCache(
+          `workspace:${selectedCourse.id}`,
+          () => getTeacherWorkspace(selectedCourse.id, selectedCourse.slug),
+          () => sharedPing(`rev:course:${selectedCourse.id}`, () => getCourseRevisionById(selectedCourse.id))
+        );
         if (!active) return;
         setParticipants(workspace?.participants ?? []);
         setStructure(workspace?.structure ?? null);

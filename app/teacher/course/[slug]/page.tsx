@@ -27,6 +27,7 @@ import { AppShell } from "@/components/AppShell";
 import { StatusPill } from "@/components/DashboardBits";
 import { Toast } from "@/components/Toast";
 import { DiscussionForum } from "@/components/DiscussionForum";
+import { CollabMeetingModal } from "@/components/CollabMeetings";
 import {
   blankWorksheet,
   gameTemplates,
@@ -37,16 +38,19 @@ import {
   type WorksheetConfig,
 } from "@/lib/demo-data";
 import {
-  getTeacherCourseBuilder,
+  getCourseBuilderBundle,
   publishCourse,
   removeCourseModuleDoc,
   saveCourseStructure,
   setCourseModuleDoc,
   updateCourseSettings,
+  type CourseMeetingRow,
   type DbCourse,
 } from "@/lib/actions/dashboards";
 import { deleteStoredFile } from "@/lib/actions/files";
 import { toModule, toSavePayload } from "@/lib/course";
+import { getCourseRevisionBySlug } from "@/lib/actions/sync";
+import { invalidateCache, loadWithCache, sharedPing } from "@/lib/client-cache";
 import { MATERIAL_ACCEPT, fileKindLabel, uploadCourseFile } from "@/lib/upload";
 
 const iconMap = {
@@ -112,6 +116,8 @@ export default function CourseBuilderPage() {
   const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [forumModule, setForumModule] = useState<Module | null>(null);
+  const [meetings, setMeetings] = useState<CourseMeetingRow[]>([]);
+  const [collabModule, setCollabModule] = useState<Module | null>(null);
 
   const dataRef = useRef({ meta, modules });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,7 +151,13 @@ export default function CourseBuilderPage() {
     let active = true;
     (async () => {
       try {
-        const data = await getTeacherCourseBuilder(slug);
+        // Cache + ping revisi: kembali ke halaman ini tidak memuat ulang data
+        // bila belum ada perubahan di database.
+        const data = await loadWithCache(
+          `builder:${slug}`,
+          () => getCourseBuilderBundle(slug),
+          () => sharedPing(`rev:course:${slug}`, () => getCourseRevisionBySlug(slug))
+        );
         if (!active) return;
         if (!data) {
           setNotFound(true);
@@ -175,6 +187,7 @@ export default function CourseBuilderPage() {
             : null
         );
         setModules(structure.modules.map(toModule));
+        setMeetings(data.meetings ?? []);
       } catch {
         if (active) setNotFound(true);
       } finally {
@@ -185,6 +198,8 @@ export default function CourseBuilderPage() {
       active = false;
     };
   }, [slug]);
+
+  // Link kolaborasi ikut terkirim bersama struktur course (satu request).
 
   /** Semua perubahan melewati gerbang draft: popup "Buat draft baru?" dulu. */
   function commit(next: { meta?: CourseMeta; modules?: Module[] }) {
@@ -260,6 +275,9 @@ export default function CourseBuilderPage() {
         if (res.structure) adoptFreshIds(res.structure);
         setSaveError("");
         setSavedAt(new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }));
+        // Draft berubah: buang cache halaman ini agar kunjungan berikutnya
+        // membaca versi terbaru, bukan salinan sebelum disunting.
+        invalidateCache(`builder:${slug}`);
         setHasDraftChanges(true);
         if (!silent) setToast("Draft tersimpan. Tekan Publish agar siswa melihat perubahan.");
         return res.structure ?? null;
@@ -351,6 +369,8 @@ export default function CourseBuilderPage() {
       setToast(res.error ?? "Gagal mempublikasikan.");
       return;
     }
+    invalidateCache(`builder:${slug}`);
+    invalidateCache(`structure:${slug}`);
     setState("published");
     setHasDraftChanges(false);
     setPublishedAt(res.publishedAt ?? new Date().toISOString());
@@ -739,6 +759,14 @@ export default function CourseBuilderPage() {
                     >
                       <Pencil size={14} /> Edit pertemuan
                     </button>
+                    <button className="button button--ghost button--small" onClick={() => setCollabModule(module)}>
+                      <Video size={14} /> Kolaborasi
+                      {meetings.filter((meeting) => meeting.moduleId === module.id).length > 0 && (
+                        <span className="collab-count">
+                          {meetings.filter((meeting) => meeting.moduleId === module.id).length}
+                        </span>
+                      )}
+                    </button>
                     <button className="button button--ghost button--small" onClick={() => setShowAdd(showAdd === module.id ? null : module.id)}>
                       <Plus size={15} /> Tambah materi
                     </button>
@@ -918,6 +946,21 @@ export default function CourseBuilderPage() {
           </div>
         </aside>
       </div>
+
+      {collabModule && (
+        <CollabMeetingModal
+          moduleId={collabModule.id}
+          moduleTitle={collabModule.title}
+          meetings={meetings.filter((meeting) => meeting.moduleId === collabModule.id)}
+          onChange={(rows) =>
+            setMeetings((current) => [
+              ...current.filter((meeting) => meeting.moduleId !== collabModule.id),
+              ...rows,
+            ])
+          }
+          onClose={() => setCollabModule(null)}
+        />
+      )}
 
       {showDraftPrompt && (
         <div className="modal-backdrop">
