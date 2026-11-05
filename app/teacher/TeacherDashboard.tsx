@@ -87,8 +87,10 @@ export function TeacherDashboard({
   );
 
   useEffect(() => {
+    // Tanpa parameter tab berarti Overview, sehingga tombol sidebar "Ringkasan"
+    // dan tab Overview selalu menampilkan isi yang sama.
     const nextTab = searchParams.get("tab");
-    if (nextTab === "participants" || nextTab === "analytics" || nextTab === "overview") setTab(nextTab);
+    setTab(nextTab === "participants" || nextTab === "analytics" ? nextTab : "overview");
     const courseParam = searchParams.get("course");
     if (courseParam) setSelectedSlug(courseParam);
   }, [searchParams]);
@@ -139,6 +141,9 @@ export function TeacherDashboard({
 
   const navigate = useCallback(
     (nextTab: Tab, slug?: string) => {
+      // State diubah lebih dulu supaya tombol tab bereaksi seketika, sama seperti
+      // saat berpindah ke Peserta atau Analitik.
+      setTab(nextTab);
       const params = new URLSearchParams();
       if (nextTab !== "overview") params.set("tab", nextTab);
       const courseSlug = slug ?? selectedCourse?.slug;
