@@ -564,7 +564,9 @@ function JoinStudentPage({
 
 function ModuleCard({ module, index, completed, courseSlug }: { module: Module; index: number; completed: string[]; courseSlug: string }) {
   const [page, setPage] = useState(0);
-  const pageSize = Math.max(1, Math.ceil(module.lessons.length / 3));
+  // Tiga materi per halaman. Pagination hanya muncul bila materi lebih dari 3:
+  // 4 materi → 3 + 1, 5 materi → 3 + 2, 6 materi → 3 + 3, dan seterusnya.
+  const pageSize = 3;
   const pageCount = Math.max(1, Math.ceil(module.lessons.length / pageSize));
   const visibleLessons = module.lessons.slice(page * pageSize, page * pageSize + pageSize);
   const doneCount = module.lessons.filter((lesson) => completed.includes(lesson.id)).length;
