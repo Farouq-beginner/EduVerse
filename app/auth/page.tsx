@@ -61,6 +61,18 @@ export default function AuthPage() {
       setToast("Sesi diakhiri karena database bermasalah. Coba masuk lagi setelah beberapa saat.");
   }, []);
 
+  // Sesi baru selalu dihitung aktif, supaya penanda aktivitas dari sesi lama
+  // tidak membuat pengguna langsung dianggap idle begitu berhasil masuk.
+  function markSessionActive() {
+    const now = Date.now();
+    try {
+      localStorage.setItem("eduverse:last-active", String(now));
+    } catch {
+      // Mode privat: cukup cookie yang dipakai middleware.
+    }
+    document.cookie = `eduverse_seen=${now}; path=/; max-age=2592000; samesite=lax`;
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (loading) return;
@@ -94,6 +106,7 @@ export default function AuthPage() {
       // router.replace (bukan push) supaya halaman login tidak tertinggal di
       // riwayat browser — tombol "kembali" tidak lagi memunculkan form login.
       const dest = resolveDestination(result.role);
+      markSessionActive();
       // Cukup replace: tujuan sudah dirender server, router.refresh() hanya
       // menambah satu round-trip penuh sehingga workspace terasa lambat dibuka.
       router.replace(dest);
@@ -224,6 +237,7 @@ export default function AuthPage() {
                 try {
                   const res = await loginUser({ email: "guru@eduverse.id", password: "GuruEduVerse123!" });
                   if (res.ok) {
+                    markSessionActive();
                     router.replace(resolveDestination(res.role));
                   } else {
                     setToast(res.error || "Gagal masuk.");
@@ -259,6 +273,7 @@ export default function AuthPage() {
                 try {
                   const res = await loginUser({ email: "siswa@eduverse.id", password: "SiswaEduVerse123!" });
                   if (res.ok) {
+                    markSessionActive();
                     router.replace(resolveDestination(res.role));
                   } else {
                     setToast(res.error || "Gagal masuk.");
