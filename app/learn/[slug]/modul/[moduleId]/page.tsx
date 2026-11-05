@@ -32,9 +32,12 @@ import {
   saveCompleted,
   saveProgress,
 } from "@/lib/storage";
-import { getCourseStructure, getMyCourseProgress, getQuizForBlock, getSessionProfile, type DbCourse } from "@/lib/actions/dashboards";
+import { getCourseMeetings, getCourseStructure, getMyCourseProgress, getQuizForBlock, getSessionProfile, type CourseMeetingRow, type DbCourse } from "@/lib/actions/dashboards";
+import { StudentMeetings } from "@/components/CollabMeetings";
 import { markBlockComplete, submitQuizAttempt, syncBlockCompletions } from "@/lib/actions/progress";
 import { toModule } from "@/lib/course";
+import { getCourseRevisionBySlug } from "@/lib/actions/sync";
+import { loadWithCache, sharedPing } from "@/lib/client-cache";
 import { fileKindLabel } from "@/lib/upload";
 
 type Identity = { name: string; className: string; participantId: string };
@@ -65,6 +68,7 @@ export default function ModulePage() {
   const [toast, setToast] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>(lessonParam ?? undefined);
+  const [meetings, setMeetings] = useState<CourseMeetingRow[]>([]);
 
   // Muat identitas lokal + struktur course dari database.
   useEffect(() => {
@@ -72,8 +76,16 @@ export default function ModulePage() {
     (async () => {
       try {
         const [structure, mine, profile] = await Promise.all([
-          getCourseStructure(courseSlug),
-          getMyCourseProgress(courseSlug),
+          loadWithCache(
+            `structure:${courseSlug}`,
+            () => getCourseStructure(courseSlug),
+            () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
+          ),
+          loadWithCache(
+            `progress:${courseSlug}`,
+            () => getMyCourseProgress(courseSlug),
+            () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
+          ),
           getSessionProfile(),
         ]);
         if (!active) return;
@@ -123,6 +135,24 @@ export default function ModulePage() {
       active = false;
     };
   }, [courseSlug]);
+
+  // Kolaborasi pertemuan diisi guru — tampil di kolom kiri halaman materi.
+  useEffect(() => {
+    if (!dbCourse?.id) return;
+    let active = true;
+    loadWithCache(
+      `meetings:${dbCourse.id}`,
+      () => getCourseMeetings(dbCourse.id),
+      () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
+    )
+      .then((rows) => {
+        if (active) setMeetings(rows);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [dbCourse?.id]);
 
   const module = modules.find((item) => item.id === params.moduleId) ?? modules[0];
   const moduleIndex = module ? modules.findIndex((item) => item.id === module.id) : 0;
@@ -290,6 +320,9 @@ export default function ModulePage() {
               </button>
             ))}
             {blocks.length === 0 && <p className="section-subtitle">Guru belum mengisi materi pertemuan ini.</p>}
+            <StudentMeetings
+              meetings={meetings.filter((meeting) => meeting.moduleId === module.id)}
+            />
             <Link href={`/learn/${courseSlug}/games`} className="module-games-link">
               <Gamepad2 size={16} />
               <span>

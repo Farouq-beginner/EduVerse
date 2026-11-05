@@ -40,6 +40,8 @@ import { getCourseStructure, getMyCourseProgress, getSessionProfile, type DbCour
 import { joinCourseByToken, validateJoinToken } from "@/lib/actions/enrollment";
 import { markBlockComplete, syncBlockCompletions } from "@/lib/actions/progress";
 import { toModule } from "@/lib/course";
+import { getCourseRevisionBySlug } from "@/lib/actions/sync";
+import { loadWithCache, sharedPing } from "@/lib/client-cache";
 
 export default function StudentLearningPage() {
   const params = useParams<{ slug: string }>();
@@ -73,7 +75,13 @@ export default function StudentLearningPage() {
     let active = true;
     (async () => {
       try {
-        const structure = await getCourseStructure(courseSlug);
+        // Ping revisi dulu: bila data belum berubah, struktur dari cache dipakai
+        // tanpa query pengambilan data penuh.
+        const structure = await loadWithCache(
+          `structure:${courseSlug}`,
+          () => getCourseStructure(courseSlug),
+          () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
+        );
         if (!active) return;
         if (!structure) {
           setNotFound(true);
@@ -82,7 +90,14 @@ export default function StudentLearningPage() {
         setDbCourse(structure);
         setModules(structure.modules.map(toModule));
 
-        const [mine, profile] = await Promise.all([getMyCourseProgress(courseSlug), getSessionProfile()]);
+        const [mine, profile] = await Promise.all([
+          loadWithCache(
+            `progress:${courseSlug}`,
+            () => getMyCourseProgress(courseSlug),
+            () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
+          ),
+          getSessionProfile(),
+        ]);
         if (!active) return;
 
         if (profile && profile.role === "STUDENT") {
