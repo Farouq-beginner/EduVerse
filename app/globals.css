@@ -1523,3 +1523,244 @@ h3 { font-size: 1.05rem; line-height: 1.25; }
   .link-lesson-card { flex-direction: column; }
   .forum-modal { max-height: 92vh; }
 }
+
+/* ── Indikator loading saat pindah route/tab ───────────────────────────── */
+.route-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.route-progress__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(124, 92, 252, 0), var(--violet), var(--teal), rgba(124, 92, 252, 0));
+  background-size: 200% 100%;
+  animation: route-progress 0.9s linear infinite;
+}
+.route-progress__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--violet);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+@keyframes route-progress {
+  from { background-position: 0 0; }
+  to { background-position: 200% 0; }
+}
+
+.route-loading {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 70vh;
+  padding: 40px 24px;
+  color: var(--muted);
+  text-align: center;
+}
+.route-loading svg { color: var(--violet); }
+.route-loading strong { color: var(--text); font-size: 0.95rem; }
+.route-loading span { font-size: 0.78rem; }
+
+/* ── Padding pass: tidak ada teks yang menempel garis kartu ───────────── */
+.module-list { padding: 2px 0; }
+.module-row { padding: 16px 18px; }
+.module-row:last-child { border-bottom: 0; }
+.module-list-footer { padding: 14px 18px 4px; }
+.builder-card__head { flex-wrap: wrap; gap: 12px; }
+.builder-header { flex-wrap: wrap; }
+.page-topbar { flex-wrap: wrap; }
+.content-block { flex-wrap: wrap; row-gap: 10px; }
+.activity-list { padding: 0 2px; }
+.course-panel .module-row { padding-inline: 4px; }
+
+/* ── Kolaborasi pertemuan ─────────────────────────────────────────────── */
+.collab-card {
+  margin-top: 15px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+.collab-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--violet);
+  font-size: 0.78rem;
+}
+.collab-card__empty {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+.collab-card__list { display: grid; gap: 7px; margin-top: 10px; }
+.collab-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface);
+  text-decoration: none;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.collab-item:hover { border-color: var(--violet); transform: translateY(-1px); }
+.collab-item__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--violet);
+}
+.collab-item--teal .collab-item__icon { background: var(--teal); }
+.collab-item--yellow .collab-item__icon { color: #6f5811; background: var(--yellow); }
+.collab-item--coral .collab-item__icon { background: var(--coral); }
+.collab-item__copy { flex: 1; min-width: 0; }
+.collab-item__copy strong,
+.collab-item__copy small { display: block; }
+.collab-item__copy strong { font-size: 0.74rem; }
+.collab-item__copy small { margin-top: 2px; color: var(--muted); font-size: 0.62rem; }
+.collab-item > svg { color: var(--muted); }
+.collab-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--violet);
+  font-size: 0.6rem;
+  font-weight: 800;
+}
+
+.collab-modal { width: min(660px, calc(100vw - 32px)); }
+.collab-modal .modal-card__head p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+.collab-form-list { display: grid; gap: 12px; margin-top: 20px; }
+.collab-form {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.collab-form__head { display: flex; align-items: center; gap: 10px; }
+.collab-form__head > div { flex: 1; min-width: 0; }
+.collab-form__head strong { display: block; font-size: 0.8rem; }
+.collab-form__head small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+.collab-form__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--violet);
+}
+.collab-form--teal .collab-form__icon { background: var(--teal); }
+.collab-form--yellow .collab-form__icon { color: #6f5811; background: var(--yellow); }
+.collab-form--coral .collab-form__icon { background: var(--coral); }
+.collab-form__row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.collab-form__row input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 0.74rem;
+}
+.collab-form__row input:focus {
+  outline: 2px solid rgba(124, 92, 252, 0.25);
+  border-color: var(--violet);
+}
+.collab-feedback {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.collab-feedback--ok { color: #157a64; background: #e6f8f2; }
+.collab-feedback--error { color: #b3413a; background: #ffebe8; }
+
+/* ── Halaman Kelola pembelajaran ──────────────────────────────────────── */
+.kelola-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+.kelola-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+.kelola-card__head { display: flex; align-items: flex-start; gap: 12px; }
+.kelola-card__art {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 13px;
+  color: #fff;
+  background: var(--violet);
+  font-weight: 800;
+}
+.kelola-card__art--teal { background: var(--teal); }
+.kelola-card__art--yellow { color: #6f5811; background: var(--yellow); }
+.kelola-card__art--coral { background: var(--coral); }
+.kelola-card__copy { flex: 1; min-width: 0; }
+.kelola-card__copy strong { display: block; font-size: 0.9rem; }
+.kelola-card__copy small { display: block; margin-top: 4px; color: var(--muted); font-size: 0.7rem; }
+.kelola-card__meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.kelola-card__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: var(--muted-strong);
+  background: var(--bg);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.kelola-card__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.kelola-empty { padding: 40px 24px; }
