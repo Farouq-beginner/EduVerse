@@ -1764,3 +1764,6 @@ h3 { font-size: 1.05rem; line-height: 1.25; }
 }
 .kelola-card__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .kelola-empty { padding: 40px 24px; }
+
+/* Baris atas form auth: merek di kiri, tombol tema di kanan. */
+.auth-form-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

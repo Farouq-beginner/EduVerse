@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, BookOpen, GraduationCap, Loader2, UsersRound } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
+import { ThemeToggleButton } from "@/components/ThemeToggle";
 import { Toast } from "@/components/Toast";
 import { loginUser, registerUser } from "@/lib/actions/auth";
 
@@ -139,7 +140,10 @@ export default function AuthPage() {
       </div>
 
       <div className="auth-form-wrap">
-        <BrandMark />
+        <div className="auth-form-top">
+          <BrandMark />
+          <ThemeToggleButton />
+        </div>
         <div className="auth-tabs">
           <button className={`auth-tab ${mode === "login" ? "is-active" : ""}`} onClick={() => setMode("login")}>
             Masuk
