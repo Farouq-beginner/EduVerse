@@ -4,11 +4,57 @@ import { NextResponse, type NextRequest } from "next/server";
 // Middleware untuk memproteksi rute berdasarkan sesi login & role.
 // Role dibaca dari tabel profiles (bukan klaim yang bisa dimanipulasi client).
 export async function updateSession(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY;
+
+  // Tanpa konfigurasi Supabase, jangan buat seluruh aplikasi error 500.
+  // Halaman auth tetap bisa tampil; pemeriksaan sesi dilewati sampai env diisi.
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.next({ request });
+  }
+
+  // Nilai placeholder seperti "[SENSITIVE]" (hasil `vercel env pull` untuk secret)
+  // juga diperlakukan sebagai env kosong, agar middleware tidak melempar error URL.
+  const urlValid = /^https?:\/\//i.test(supabaseUrl.trim());
+  const keyValid =
+    supabaseKey.trim().length > 20 && !/^\[?SENSITIVE\]?$/i.test(supabaseKey.trim());
+  if (!urlValid || !keyValid) {
+    return NextResponse.next({ request });
+  }
+
+  const path = request.nextUrl.pathname;
+
+  // Idle timeout: akun yang tidak dipakai melewati batas otomatis di-logout,
+  // termasuk saat tab lama dibuka lagi setelah berjam-jam.
+  const idleMinutesRaw = Number(
+    process.env.IDLE_TIMEOUT_MINUTES ?? process.env.NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES ?? 120
+  );
+  const idleMinutes = Number.isFinite(idleMinutesRaw) && idleMinutesRaw > 0 ? idleMinutesRaw : 120;
+  const seenAt = Number(request.cookies.get("eduverse_seen")?.value ?? 0);
+  const isSessionRoute =
+    path.startsWith("/teacher") || path.startsWith("/admin") || path.startsWith("/student");
+
+  if (isSessionRoute && seenAt > 0 && Date.now() - seenAt > idleMinutes * 60_000) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth";
+    url.search = "";
+    url.searchParams.set("reason", "idle");
+    const response = NextResponse.redirect(url);
+    for (const cookie of request.cookies.getAll()) {
+      if (cookie.name.startsWith("sb-") || cookie.name.startsWith("supabase")) {
+        response.cookies.set(cookie.name, "", { maxAge: 0, path: "/" });
+      }
+    }
+    response.cookies.set("eduverse_seen", "", { maxAge: 0, path: "/" });
+    return response;
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseKey,
     {
       cookies: {
         getAll() {
@@ -30,7 +76,6 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
   const isProtected =
     path.startsWith("/teacher") || path.startsWith("/admin") || path.startsWith("/student");
 

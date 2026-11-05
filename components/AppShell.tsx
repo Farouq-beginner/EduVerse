@@ -4,14 +4,17 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, BookOpen, ChevronDown, CircleHelp, Gamepad2, LayoutDashboard, LayoutGrid, LogOut, Moon, Settings2, ShieldCheck, Sun, Users, WandSparkles } from "lucide-react";
+import { BarChart3, BookOpen, ChevronDown, CircleHelp, FolderKanban, Gamepad2, LayoutDashboard, LayoutGrid, LogOut, Moon, Settings2, ShieldCheck, Sun, Users, WandSparkles } from "lucide-react";
 import { BrandMark } from "./BrandMark";
+import { RouteProgress } from "./RouteProgress";
+import { SessionGuard } from "./SessionGuard";
 import { getBrandSettings, getTheme, saveTheme } from "@/lib/storage";
 import { getSessionProfile } from "@/lib/actions/dashboards";
 import { logoutUser } from "@/lib/actions/auth";
 
 const teacherLinks = [
   { href: "/teacher", label: "Ringkasan", icon: LayoutDashboard },
+  { href: "/teacher/kelola-pembelajaran", label: "Kelola pembelajaran", icon: FolderKanban },
   { href: "/teacher/game-studio", label: "Mini-Game Studio", icon: Gamepad2, accent: true },
   { href: "/teacher?tab=participants", label: "Peserta", icon: Users },
   { href: "/teacher?tab=analytics", label: "Analitik", icon: BarChart3 },
@@ -73,6 +76,8 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
     const onCatalogue = pathname === "/pilih-pembelajaran";
     return (
       <div className="student-surface">
+        <RouteProgress />
+        <SessionGuard />
         <div className="student-topbar">
           <div className="student-topbar__left">
             <BrandMark />
@@ -113,6 +118,8 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
 
   return (
     <div className="app-frame">
+      <RouteProgress />
+      <SessionGuard />
       <aside className="sidebar">
         <div className="sidebar__brand"><BrandMark /><span className="demo-badge">DEMO</span></div>
         <div className="workspace-switcher"><div className="workspace-avatar">{initials}</div><div><strong>{account ? account.fullName : profileLoaded ? "Akun guru" : "Memuat profil..."}</strong><small>{account ? roleLabel : "Sinkron akun"}</small></div><ChevronDown size={15} /></div>
