@@ -82,6 +82,7 @@ model Course {
   progress        Progress[]
   quizAttempts    QuizAttempt[]
   submissions     Submission[]
+  meetings        Meeting[]
 
   @@index([ownerId])
   @@index([state])
@@ -111,6 +112,7 @@ model Module {
   /// Estimasi waktu tampil terpisah dari eyebrow agar format rapi.
   duration  String        @default("10 menit")
   blocks    LessonBlock[]
+  meetings  Meeting[]
   course    Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([courseId])
@@ -135,6 +137,24 @@ model LessonBlock {
   quizAttempts QuizAttempt[]
   submissions  Submission[]
 
+  @@index([moduleId])
+}
+
+/// Link kolaborasi (Zoom/Meet/Classroom/Teams) untuk satu pertemuan.
+/// Satu pertemuan menyimpan paling banyak satu link per penyedia.
+model Meeting {
+  id        String   @id @default(cuid())
+  courseId  String
+  moduleId  String
+  provider  String
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module    Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([moduleId, provider])
+  @@index([courseId])
   @@index([moduleId])
 }
 
