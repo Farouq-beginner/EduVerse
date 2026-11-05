@@ -1,6 +1,9 @@
 "use server";
+import { unstable_cache } from "next/cache";
+import { revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { getCollabProvider, validateCollabUrl } from "@/lib/collab";
 
 /** Ambil ID user login + profilnya dari server. Aman saat DB/auth belum aktif. */
 export async function getSessionProfile() {
@@ -278,12 +281,26 @@ export async function getEnrolledCourseIdBySlug(slug: string): Promise<string | 
 
 /** Statistik guru yang dihitung dari database, bukan angka statis. */
 export async function getTeacherStats() {
+  const me = await getSessionProfile();
+  if (!me || me.role !== "TEACHER" || !me.isActive) return null;
+  return cachedTeacherStats(me.id)();
+}
+
+/**
+ * Statistik di-cache per guru. Membuka dashboard berulang (termasuk tepat
+ * setelah login) tidak lagi menjalankan semua query hitung dari nol.
+ */
+const cachedTeacherStats = (ownerId: string) =>
+  unstable_cache(() => queryTeacherStats(ownerId), ["teacher-stats", ownerId], {
+    tags: [`teacher-stats-${ownerId}`],
+    revalidate: 60,
+  });
+
+async function queryTeacherStats(ownerId: string) {
   try {
-    const me = await getSessionProfile();
-    if (!me || me.role !== "TEACHER") return null;
 
   const courses = await prisma.course.findMany({
-    where: { ownerId: me.id },
+    where: { ownerId },
     select: { id: true },
   });
   const courseIds = courses.map((c) => c.id);
@@ -349,12 +366,26 @@ export type TeacherCourseCard = {
  * benar-benar kosong sampai ia membuat pembelajaran sendiri.
  */
 export async function getMyCourses(): Promise<TeacherCourseCard[]> {
-  try {
-    const me = await getSessionProfile();
-    if (!me || me.role !== "TEACHER" || !me.isActive) return [];
+  const me = await getSessionProfile();
+  if (!me || me.role !== "TEACHER" || !me.isActive) return [];
+  return cachedMyCourses(me.id)();
+}
 
+/**
+ * Cache per guru: membuka ulang dashboard, pindah tab, atau kembali dari course
+ * builder tidak lagi memicu seluruh query database. Cache dibersihkan lewat
+ * revalidateTag setiap kali data pembelajaran berubah.
+ */
+const cachedMyCourses = (ownerId: string) =>
+  unstable_cache(() => queryMyCourses(ownerId), ["teacher-courses", ownerId], {
+    tags: [`teacher-courses-${ownerId}`],
+    revalidate: 120,
+  });
+
+async function queryMyCourses(ownerId: string): Promise<TeacherCourseCard[]> {
+  try {
     const courses = await prisma.course.findMany({
-      where: { ownerId: me.id },
+      where: { ownerId },
       include: {
         modules: {
           orderBy: { order: "asc" },
@@ -448,6 +479,9 @@ export async function createTeacherCourse(input: {
       },
     });
 
+    revalidateTag(`teacher-courses-${me.id}`);
+    revalidateTag(`teacher-stats-${me.id}`);
+
     return {
       ok: true,
       course: {
@@ -509,20 +543,49 @@ export async function getTeacherWorkspace(courseId: string, slug: string) {
 export async function getTeacherCourseBuilder(
   slug: string
 ): Promise<{ structure: DbCourse; teacherName: string } | null> {
+  const me = await getSessionProfile();
+  if (!me || me.role !== "TEACHER" || !me.isActive) return null;
+  return cachedCourseBuilder(slug, me.id, me.fullName)();
+}
+
+/**
+ * Semua data course builder dalam satu request: struktur (ter-cache) + link
+ * kolaborasi tiap pertemuan. Satu round-trip, bukan dua, sehingga perpindahan
+ * halaman tidak menumpuk permintaan.
+ */
+export async function getCourseBuilderBundle(slug: string) {
   try {
     const me = await getSessionProfile();
     if (!me || me.role !== "TEACHER" || !me.isActive) return null;
-    const structure = await getCourseStructure(slug, {
-      teacherOnly: true,
-      viewerId: me.id,
-      viewerRole: me.role,
-    });
-    if (!structure) return null;
-    return { structure, teacherName: me.fullName };
+
+    const builder = await cachedCourseBuilder(slug, me.id, me.fullName)();
+    if (!builder) return null;
+
+    const meetings = await cachedCourseMeetings(builder.structure.id)();
+    return { ...builder, meetings };
   } catch {
     return null;
   }
 }
+
+/** Struktur course builder di-cache per slug agar refresh halaman terasa instan. */
+const cachedCourseBuilder = (slug: string, viewerId: string, teacherName: string) =>
+  unstable_cache(
+    async () => {
+      try {
+        const structure = await getCourseStructure(slug, {
+          teacherOnly: true,
+          viewerId,
+          viewerRole: "TEACHER",
+        });
+        return structure ? { structure, teacherName } : null;
+      } catch {
+        return null;
+      }
+    },
+    ["course-builder", slug, viewerId],
+    { tags: [`course-${slug}`], revalidate: 120 }
+  );
 
 export type TeacherAccountRow = {
   id: string;
@@ -1220,6 +1283,10 @@ export async function saveCourseStructure(
 
     // Kembalikan struktur terbaru supaya client memakai id blok yang benar.
     const courseRow = await prisma.course.findUnique({ where: { id: courseId }, select: { slug: true } });
+    if (courseRow) revalidateTag(`course-${courseRow.slug}`);
+    revalidateTag(`teacher-courses-${me.id}`);
+    revalidateTag(`teacher-stats-${me.id}`);
+    revalidateTag(`teacher-workspace-${courseId}`);
     const fresh = courseRow ? await getCourseStructure(courseRow.slug, { teacherOnly: true }) : null;
     return { ok: true, structure: fresh ?? undefined };
   } catch {
@@ -1321,6 +1388,10 @@ export async function publishCourse(
       }),
     ]);
 
+    revalidateTag(`course-${course.slug}`);
+    revalidateTag(`teacher-courses-${me.id}`);
+    revalidateTag(`teacher-stats-${me.id}`);
+    revalidateTag(`teacher-workspace-${courseId}`);
     return { ok: true, publishedAt: now.toISOString() };
   } catch {
     return { ok: false, error: "Gagal mempublikasikan pembelajaran." };
@@ -1399,7 +1470,7 @@ export async function updateCourseSettings(
 
     const course = await prisma.course.findFirst({
       where: { id: courseId, ownerId: me.id },
-      select: { id: true },
+      select: { id: true, slug: true },
     });
     if (!course) return { ok: false, error: "Course tidak ditemukan atau bukan milikmu." };
 
@@ -1415,6 +1486,9 @@ export async function updateCourseSettings(
       },
     });
 
+    revalidateTag(`course-${course.slug}`);
+    revalidateTag(`teacher-courses-${me.id}`);
+    revalidateTag(`teacher-stats-${me.id}`);
     return { ok: true };
   } catch {
     return { ok: false, error: "Gagal menyimpan pengaturan course." };
@@ -1744,4 +1818,121 @@ function formatRelative(date: Date): string {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h} jam lalu`;
   return `${Math.floor(h / 24)} hari lalu`;
+}
+
+/* ── Kolaborasi per pertemuan ──────────────────────────────────────────── */
+
+export type CourseMeetingRow = {
+  id: string;
+  moduleId: string;
+  provider: string;
+  url: string;
+};
+
+/**
+ * Link kolaborasi (Zoom/Meet/Classroom/Teams) milik sebuah pembelajaran.
+ * Di-cache per course supaya berpindah pertemuan tidak memicu query ulang.
+ */
+export async function getCourseMeetings(courseId: string): Promise<CourseMeetingRow[]> {
+  if (!courseId) return [];
+  return cachedCourseMeetings(courseId)();
+}
+
+const cachedCourseMeetings = (courseId: string) =>
+  unstable_cache(
+    async (): Promise<CourseMeetingRow[]> => {
+      try {
+        return await prisma.meeting.findMany({
+          where: { courseId },
+          select: { id: true, moduleId: true, provider: true, url: true },
+          orderBy: { createdAt: "asc" },
+        });
+      } catch {
+        // Tabel Meeting belum dibuat di database — halaman tetap tampil.
+        return [];
+      }
+    },
+    ["course-meetings", courseId],
+    { tags: [`meetings-${courseId}`], revalidate: 300 }
+  );
+
+/**
+ * Simpan / ganti link kolaborasi satu pertemuan. Link divalidasi di server:
+ * kolaborasi Zoom hanya menerima link Zoom, Classroom hanya link Classroom, dst.
+ */
+export async function setCourseMeeting(input: {
+  moduleId: string;
+  provider: string;
+  url: string;
+}): Promise<{ ok: boolean; error?: string; meeting?: CourseMeetingRow }> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER" || !me.isActive)
+      return { ok: false, error: "Hanya guru yang boleh mengatur kolaborasi." };
+
+    const provider = getCollabProvider(input.provider);
+    if (!provider) return { ok: false, error: "Jenis kolaborasi tidak dikenal." };
+
+    const validated = validateCollabUrl(provider.id, input.url);
+    if (!validated.ok) return { ok: false, error: validated.error };
+
+    const moduleRow = await prisma.module.findFirst({
+      where: { id: input.moduleId, course: { ownerId: me.id } },
+      select: { id: true, courseId: true },
+    });
+    if (!moduleRow)
+      return { ok: false, error: "Pertemuan tidak ditemukan atau bukan milikmu." };
+
+    const saved = await prisma.meeting.upsert({
+      where: { moduleId_provider: { moduleId: moduleRow.id, provider: provider.id } },
+      create: {
+        courseId: moduleRow.courseId,
+        moduleId: moduleRow.id,
+        provider: provider.id,
+        url: validated.url,
+      },
+      update: { url: validated.url },
+      select: { id: true, moduleId: true, provider: true, url: true },
+    });
+
+    revalidateTag(`meetings-${moduleRow.courseId}`);
+    return { ok: true, meeting: saved };
+  } catch {
+    return {
+      ok: false,
+      error:
+        "Gagal menyimpan kolaborasi. Pastikan tabel Meeting sudah dibuat (npx prisma db push).",
+    };
+  }
+}
+
+/** Hapus link kolaborasi satu pertemuan. */
+export async function deleteCourseMeeting(input: {
+  moduleId: string;
+  provider: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER" || !me.isActive)
+      return { ok: false, error: "Hanya guru yang boleh menghapus kolaborasi." };
+
+    const provider = getCollabProvider(input.provider);
+    if (!provider) return { ok: false, error: "Jenis kolaborasi tidak dikenal." };
+
+    const moduleRow = await prisma.module.findFirst({
+      where: { id: input.moduleId, course: { ownerId: me.id } },
+      select: { id: true, courseId: true },
+    });
+    if (!moduleRow)
+      return { ok: false, error: "Pertemuan tidak ditemukan atau bukan milikmu." };
+
+    await prisma.meeting.deleteMany({
+      where: { moduleId: moduleRow.id, provider: provider.id },
+    });
+
+    revalidateTag(`meetings-${moduleRow.courseId}`);
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Gagal menghapus kolaborasi." };
+  }
 }
