@@ -519,12 +519,13 @@ export async function getTeacherWorkspace(courseId: string, slug: string) {
     const me = await getSessionProfile();
     if (!me || me.role !== "TEACHER" || !me.isActive) return null;
 
-    const [participants, structure, analytics, submissions, activity] = await Promise.all([
+    const [participants, structure, analytics, submissions, activity, trend] = await Promise.all([
       getCourseParticipants(courseId, me),
       getCourseStructure(slug, { teacherOnly: true, viewerId: me.id, viewerRole: me.role }),
       getCourseAnalytics(courseId, me),
       getCourseSubmissions(courseId, undefined, me),
       getTeacherCourseActivity(courseId, me),
+      getCourseProgressTrend(courseId),
     ]);
 
     return {
@@ -533,6 +534,7 @@ export async function getTeacherWorkspace(courseId: string, slug: string) {
       analytics,
       submissions,
       activity,
+      trend,
     };
   } catch {
     return null;
@@ -1934,5 +1936,475 @@ export async function deleteCourseMeeting(input: {
     return { ok: true };
   } catch {
     return { ok: false, error: "Gagal menghapus kolaborasi." };
+  }
+}
+
+/* ── Grafik progres dari database ──────────────────────────────────────── */
+
+export type ProgressTrendPoint = { label: string; value: number; total: number };
+
+/**
+ * Progres penyelesaian enam minggu terakhir, dihitung dari Progress.completedAt.
+ * Nilai grafik adalah jumlah aktivitas selesai per minggu yang diskalakan ke
+ * 100 agar bentuk grafiknya sebanding — bukan angka karangan.
+ */
+export async function getCourseProgressTrend(
+  courseId: string
+): Promise<ProgressTrendPoint[]> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER") return [];
+
+    const course = await prisma.course.findFirst({
+      where: { id: courseId, ownerId: me.id },
+      select: { id: true },
+    });
+    if (!course) return [];
+
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 41); // 6 minggu termasuk minggu berjalan
+
+    const rows = await prisma.progress.findMany({
+      where: { courseId, completed: true, completedAt: { gte: start } },
+      select: { completedAt: true },
+    });
+
+    const weeks = Array.from({ length: 6 }, (_, index) => {
+      const weekStart = new Date(start);
+      weekStart.setDate(start.getDate() + index * 7);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 7);
+      const total = rows.filter((row) => {
+        const at = row.completedAt ?? null;
+        return at ? at >= weekStart && at < weekEnd : false;
+      }).length;
+      return {
+        label: weekStart.toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+        total,
+      };
+    });
+
+    const max = Math.max(1, ...weeks.map((week) => week.total));
+    return weeks.map((week) => ({
+      label: week.label,
+      total: week.total,
+      value: Math.round((week.total / max) * 100),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/* ── Direktori peserta lintas pembelajaran ─────────────────────────────── */
+
+export type ParticipantDirectoryRow = {
+  id: string;
+  name: string;
+  nickname: string | null;
+  className: string;
+  courseCount: number;
+  courseTitles: string[];
+  avgProgress: number;
+  lastActive: string;
+};
+
+/** Semua siswa yang terdaftar di pembelajaran milik guru yang login. */
+export async function getParticipantDirectory(): Promise<ParticipantDirectoryRow[]> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER" || !me.isActive) return [];
+
+    const courses = await prisma.course.findMany({
+      where: { ownerId: me.id },
+      select: { id: true, title: true, modules: { select: { _count: { select: { blocks: true } } } } },
+    });
+    if (courses.length === 0) return [];
+
+    const courseIds = courses.map((course) => course.id);
+    const blockTotals = new Map(
+      courses.map((course) => [
+        course.id,
+        course.modules.reduce((sum, module) => sum + module._count.blocks, 0),
+      ])
+    );
+
+    const [enrollments, doneGroups] = await Promise.all([
+      prisma.enrollment.findMany({
+        where: { courseId: { in: courseIds }, status: "ACTIVE" },
+        include: {
+          student: { select: { id: true, fullName: true, nickname: true, className: true, lastActive: true } },
+        },
+        orderBy: { joinedAt: "desc" },
+      }),
+      prisma.progress.groupBy({
+        by: ["studentId", "courseId"],
+        where: { courseId: { in: courseIds }, completed: true },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const doneByKey = new Map(
+      doneGroups.map((row) => [`${row.studentId}:${row.courseId}`, row._count._all])
+    );
+    const courseTitleById = new Map(courses.map((course) => [course.id, course.title]));
+
+    const grouped = new Map<string, ParticipantDirectoryRow & { progressSum: number }>();
+    for (const enrollment of enrollments) {
+      const student = enrollment.student;
+      const blockTotal = blockTotals.get(enrollment.courseId) ?? 0;
+      const done = doneByKey.get(`${student.id}:${enrollment.courseId}`) ?? 0;
+      const progress = blockTotal > 0 ? Math.round((done / blockTotal) * 100) : 0;
+      const current =
+        grouped.get(student.id) ?? {
+          id: student.id,
+          name: student.fullName,
+          nickname: student.nickname ?? null,
+          className: student.className ?? "—",
+          courseCount: 0,
+          courseTitles: [],
+          avgProgress: 0,
+          progressSum: 0,
+          lastActive: formatRelative(student.lastActive),
+        };
+      current.courseCount += 1;
+      current.progressSum += progress;
+      current.courseTitles.push(courseTitleById.get(enrollment.courseId) ?? "Pembelajaran");
+      current.avgProgress = Math.round(current.progressSum / current.courseCount);
+      grouped.set(student.id, current);
+    }
+
+    return [...grouped.values()]
+      .map(({ progressSum: _progressSum, ...row }) => row)
+      .sort((a, b) => b.avgProgress - a.avgProgress || a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
+/* ── Laporan lengkap jawaban peserta ───────────────────────────────────── */
+
+export type ParticipantAnswerRow = {
+  question: string;
+  given: string;
+  correct: string;
+  isCorrect: boolean;
+  points: number;
+};
+
+export type ParticipantQuizRow = {
+  id: string;
+  attemptNumber: number;
+  score: number;
+  totalPoints: number;
+  passed: boolean;
+  submittedAt: string;
+  answers: ParticipantAnswerRow[];
+};
+
+export type ParticipantBlockReport = {
+  blockId: string;
+  title: string;
+  type: string;
+  completed: boolean;
+  completedAt: string | null;
+  quizzes: ParticipantQuizRow[];
+  submission: {
+    response: string;
+    fileUrl: string | null;
+    fileName: string | null;
+    score: number | null;
+    maxScore: number;
+    status: string;
+    submittedAt: string;
+  } | null;
+};
+
+export type ParticipantMeetingReport = {
+  moduleId: string;
+  module: string;
+  courseId: string;
+  course: string;
+  blocks: ParticipantBlockReport[];
+};
+
+export type ParticipantReport = {
+  student: {
+    id: string;
+    name: string;
+    nickname: string | null;
+    username: string | null;
+    className: string;
+    lastActive: string;
+    avatarUrl: string | null;
+  };
+  totals: {
+    meetings: number;
+    blocks: number;
+    completed: number;
+    progress: number;
+    avgScore: number | null;
+    submissions: number;
+  };
+  meetings: ParticipantMeetingReport[];
+};
+
+function readAttemptAnswers(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {};
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    result[key] = typeof value === "string" ? value : JSON.stringify(value ?? "");
+  }
+  return result;
+}
+
+/**
+ * Laporan lengkap satu peserta: progres per pertemuan, seluruh attempt kuis
+ * beserta jawabannya, dan semua tugas yang dikirim. Hanya untuk guru pemilik
+ * pembelajaran tempat siswa tersebut terdaftar.
+ */
+export async function getParticipantReport(
+  studentId: string,
+  courseId?: string
+): Promise<{ ok: boolean; report?: ParticipantReport; error?: string }> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER" || !me.isActive)
+      return { ok: false, error: "Hanya guru yang boleh membuka laporan peserta." };
+
+    const courses = await prisma.course.findMany({
+      where: { ownerId: me.id, ...(courseId ? { id: courseId } : {}) },
+      select: {
+        id: true,
+        title: true,
+        modules: {
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            title: true,
+            blocks: {
+              orderBy: { order: "asc" },
+              select: {
+                id: true,
+                title: true,
+                type: true,
+                quiz: {
+                  select: {
+                    questions: {
+                      orderBy: { order: "asc" },
+                      select: { id: true, prompt: true, answer: true, points: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (courses.length === 0) return { ok: false, error: "Belum ada pembelajaran milikmu." };
+
+    const courseIds = courses.map((course) => course.id);
+    const student = await prisma.profile.findUnique({
+      where: { id: studentId },
+      select: {
+        id: true,
+        fullName: true,
+        nickname: true,
+        username: true,
+        className: true,
+        lastActive: true,
+        avatarUrl: true,
+      },
+    });
+    if (!student) return { ok: false, error: "Peserta tidak ditemukan." };
+
+    const enrollment = await prisma.enrollment.findFirst({
+      where: { studentId, courseId: { in: courseIds }, status: "ACTIVE" },
+      select: { id: true },
+    });
+    if (!enrollment) return { ok: false, error: "Peserta ini tidak terdaftar di pembelajaranku." };
+
+    const [progressRows, attempts, submissions] = await Promise.all([
+      prisma.progress.findMany({
+        where: { studentId, courseId: { in: courseIds } },
+        select: { blockId: true, completed: true, completedAt: true },
+      }),
+      prisma.quizAttempt.findMany({
+        where: { studentId, courseId: { in: courseIds } },
+        orderBy: { submittedAt: "asc" },
+        select: {
+          id: true,
+          blockId: true,
+          attemptNumber: true,
+          score: true,
+          totalPoints: true,
+          passed: true,
+          submittedAt: true,
+          answers: true,
+        },
+      }),
+      prisma.submission.findMany({
+        where: { studentId, courseId: { in: courseIds } },
+        orderBy: { submittedAt: "desc" },
+        select: {
+          blockId: true,
+          response: true,
+          fileUrl: true,
+          fileName: true,
+          score: true,
+          maxScore: true,
+          status: true,
+          submittedAt: true,
+        },
+      }),
+    ]);
+
+    const progressByBlock = new Map(progressRows.map((row) => [row.blockId, row]));
+    const attemptsByBlock = new Map<string, typeof attempts>();
+    for (const attempt of attempts) {
+      const list = attemptsByBlock.get(attempt.blockId) ?? [];
+      list.push(attempt);
+      attemptsByBlock.set(attempt.blockId, list);
+    }
+    const submissionByBlock = new Map(submissions.map((row) => [row.blockId, row]));
+
+    const meetings: ParticipantMeetingReport[] = [];
+    let totalBlocks = 0;
+    let completedBlocks = 0;
+    const scores: number[] = [];
+
+    for (const course of courses) {
+      for (const module of course.modules) {
+        const blocks: ParticipantBlockReport[] = module.blocks.map((block) => {
+          totalBlocks += 1;
+          const progressRow = progressByBlock.get(block.id);
+          if (progressRow?.completed) completedBlocks += 1;
+
+          const questions = block.quiz?.questions ?? [];
+          const quizzes: ParticipantQuizRow[] = (attemptsByBlock.get(block.id) ?? []).map(
+            (attempt) => {
+              const answers = readAttemptAnswers(attempt.answers);
+              const rows = questions.map((question, index) => {
+                const given = answers[question.id] ?? answers[String(index)] ?? "—";
+                return {
+                  question: question.prompt,
+                  given: given || "—",
+                  correct: question.answer,
+                  isCorrect: given.trim().toLowerCase() === question.answer.trim().toLowerCase(),
+                  points: question.points,
+                };
+              });
+              scores.push(attempt.totalPoints ? (attempt.score / attempt.totalPoints) * 100 : 0);
+              return {
+                id: attempt.id,
+                attemptNumber: attempt.attemptNumber,
+                score: attempt.score,
+                totalPoints: attempt.totalPoints,
+                passed: attempt.passed,
+                submittedAt: attempt.submittedAt.toISOString(),
+                answers: rows,
+              };
+            }
+          );
+
+          const submission = submissionByBlock.get(block.id);
+          return {
+            blockId: block.id,
+            title: block.title,
+            type: block.type,
+            completed: Boolean(progressRow?.completed),
+            completedAt: progressRow?.completedAt ? progressRow.completedAt.toISOString() : null,
+            quizzes,
+            submission: submission
+              ? {
+                  response: submission.response,
+                  fileUrl: submission.fileUrl ?? null,
+                  fileName: submission.fileName ?? null,
+                  score: submission.score,
+                  maxScore: submission.maxScore,
+                  status: submission.status,
+                  submittedAt: submission.submittedAt.toISOString(),
+                }
+              : null,
+          };
+        });
+
+        if (blocks.length > 0) {
+          meetings.push({
+            moduleId: module.id,
+            module: module.title,
+            courseId: course.id,
+            course: course.title,
+            blocks,
+          });
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      report: {
+        student: {
+          id: student.id,
+          name: student.fullName,
+          nickname: student.nickname ?? null,
+          username: student.username ?? null,
+          className: student.className ?? "—",
+          lastActive: formatRelative(student.lastActive),
+          avatarUrl: student.avatarUrl ?? null,
+        },
+        totals: {
+          meetings: meetings.length,
+          blocks: totalBlocks,
+          completed: completedBlocks,
+          progress: totalBlocks > 0 ? Math.round((completedBlocks / totalBlocks) * 100) : 0,
+          avgScore: scores.length
+            ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length)
+            : null,
+          submissions: submissions.length,
+        },
+        meetings,
+      },
+    };
+  } catch {
+    return { ok: false, error: "DATABASE_UNAVAILABLE" };
+  }
+}
+
+/** Angka komunitas untuk halaman utama — dihitung dari aktivitas nyata. */
+export async function getLearningCommunityStats(): Promise<{
+  activeStudents: number;
+  totalStudents: number;
+  enrollments: number;
+}> {
+  try {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const [totalStudents, enrollments, activeByProgress, activeByQuiz] = await Promise.all([
+      prisma.profile.count({ where: { role: "STUDENT", isActive: true } }),
+      prisma.enrollment.count({ where: { status: "ACTIVE" } }),
+      prisma.progress.findMany({
+        where: { completed: true, completedAt: { gte: weekAgo } },
+        distinct: ["studentId"],
+        select: { studentId: true },
+      }),
+      prisma.quizAttempt.findMany({
+        where: { submittedAt: { gte: weekAgo } },
+        distinct: ["studentId"],
+        select: { studentId: true },
+      }),
+    ]);
+
+    const active = new Set([
+      ...activeByProgress.map((row) => row.studentId),
+      ...activeByQuiz.map((row) => row.studentId),
+    ]).size;
+
+    return { activeStudents: active, totalStudents, enrollments };
+  } catch {
+    return { activeStudents: 0, totalStudents: 0, enrollments: 0 };
   }
 }
