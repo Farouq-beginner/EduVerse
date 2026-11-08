@@ -2,11 +2,14 @@
  * Aturan kolaborasi per pertemuan.
  *
  * Setiap penyedia hanya menerima link miliknya sendiri: link Zoom tidak bisa
- * disimpan sebagai Google Classroom, dan sebaliknya. Validasi dijalankan di
- * server (sumber kebenaran) dan dipakai ulang di client untuk pesan cepat.
+ * disimpan sebagai Google Meet, dan sebaliknya. Validasi dijalankan di server
+ * (sumber kebenaran) dan dipakai ulang di client untuk pesan cepat.
+ *
+ * Daftar penyedia mengikuti aplikasi yang benar-benar dipakai di kelas:
+ * Zoom, Google Meet, Mathigon Polypad, GeoGebra, dan PhET.
  */
 
-export type CollabProviderId = "zoom" | "meet" | "classroom" | "teams";
+export type CollabProviderId = "zoom" | "meet" | "polypad" | "geogebra" | "phet";
 
 export type CollabProvider = {
   id: CollabProviderId;
@@ -39,22 +42,31 @@ export const COLLAB_PROVIDERS: CollabProvider[] = [
     tone: "teal",
   },
   {
-    id: "classroom",
-    label: "Google Classroom",
-    short: "Classroom",
-    hosts: ["classroom.google.com"],
-    placeholder: "https://classroom.google.com/c/ABCDEFG",
-    hint: "Buka kelas di Classroom lalu salin link kelasnya.",
+    id: "polypad",
+    label: "Mathigon Polypad",
+    short: "Polypad",
+    hosts: ["mathigon.org"],
+    placeholder: "https://mathigon.org/polypad/abc123",
+    hint: "Buka kanvas Polypad lalu salin link berbaginya.",
     tone: "yellow",
   },
   {
-    id: "teams",
-    label: "Microsoft Teams",
-    short: "Teams",
-    hosts: ["teams.microsoft.com", "teams.live.com"],
-    placeholder: "https://teams.microsoft.com/l/meetup-join/...",
-    hint: "Gunakan link rapat Teams, bukan link file.",
+    id: "geogebra",
+    label: "GeoGebra",
+    short: "GeoGebra",
+    hosts: ["geogebra.org"],
+    placeholder: "https://www.geogebra.org/m/abcdefgh",
+    hint: "Salin link applet atau aktivitas GeoGebra.",
     tone: "coral",
+  },
+  {
+    id: "phet",
+    label: "PhET",
+    short: "PhET",
+    hosts: ["phet.colorado.edu"],
+    placeholder: "https://phet.colorado.edu/sims/html/build-an-atom/latest/build-an-atom_all.html",
+    hint: "Salin link simulasi PhET yang ingin dibuka siswa.",
+    tone: "violet",
   },
 ];
 

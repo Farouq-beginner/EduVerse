@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import {
+  Atom,
   Check,
   ExternalLink,
-  GraduationCap,
   Loader2,
   Presentation,
+  Shapes,
+  Triangle,
   Trash2,
-  Users,
   Video,
 } from "lucide-react";
 import {
@@ -26,8 +27,10 @@ import {
 function ProviderIcon({ provider, size = 16 }: { provider: string; size?: number }) {
   if (provider === "zoom") return <Video size={size} />;
   if (provider === "meet") return <Presentation size={size} />;
-  if (provider === "classroom") return <GraduationCap size={size} />;
-  return <Users size={size} />;
+  if (provider === "polypad") return <Shapes size={size} />;
+  if (provider === "geogebra") return <Triangle size={size} />;
+  if (provider === "phet") return <Atom size={size} />;
+  return <Presentation size={size} />;
 }
 
 /** Kotak kolaborasi di halaman siswa — hanya menampilkan link yang diisi guru. */
@@ -145,7 +148,8 @@ export function CollabMeetingModal({
             <h2>{moduleTitle}</h2>
             <p>
               Tempel link dari aplikasi aslinya. Link Zoom tidak bisa disimpan sebagai Google
-              Classroom — setiap kolaborasi hanya menerima link miliknya sendiri.
+              Meet — setiap kolaborasi hanya menerima link miliknya sendiri. Kolaborasi yang
+              belum diisi cukup dibiarkan kosong.
             </p>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Tutup">
