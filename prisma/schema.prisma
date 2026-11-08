@@ -13,6 +13,10 @@ datasource db {
 model Profile {
   id                  String          @id
   fullName            String
+  /// Nama panggilan singkat yang tampil di samping nama lengkap.
+  nickname            String?
+  /// Username unik untuk identitas di kelas (tanpa spasi).
+  username            String?         @unique
   role                Role            @default(STUDENT)
   className           String?
   avatarUrl           String?

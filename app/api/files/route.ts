@@ -83,6 +83,35 @@ export async function POST(request: Request) {
       );
     }
 
+    // Foto profil diunggah tanpa course: berkas publik milik akun sendiri.
+    if (purpose === "avatar") {
+      if (!mimeType.startsWith("image/")) {
+        return NextResponse.json(
+          { ok: false, error: "Foto profil harus berupa gambar (PNG/JPG/WEBP)." },
+          { status: 415 }
+        );
+      }
+      const avatarBuffer = Buffer.from(await file.arrayBuffer());
+      const stored = await prisma.storedFile.create({
+        data: {
+          ownerId: profile.id,
+          fileName: file.name || "foto-profil",
+          mimeType,
+          size: avatarBuffer.length,
+          isPublic: true,
+          data: avatarBuffer,
+        },
+        select: { id: true, fileName: true, mimeType: true },
+      });
+      return NextResponse.json({
+        ok: true,
+        fileId: stored.id,
+        fileName: stored.fileName,
+        mimeType: stored.mimeType,
+        url: `/api/files/${stored.id}`,
+      });
+    }
+
     if (!courseId) {
       return NextResponse.json({ ok: false, error: "Course wajib dipilih." }, { status: 400 });
     }

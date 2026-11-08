@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, BookOpen, ChevronDown, CircleHelp, FolderKanban, Gamepad2, LayoutDashboard, LayoutGrid, LogOut, Moon, Settings2, ShieldCheck, Sun, Users, WandSparkles } from "lucide-react";
+import { BarChart3, BookOpen, ChevronDown, CircleHelp, FolderKanban, Gamepad2, LayoutDashboard, LayoutGrid, LogOut, Moon, Settings2, ShieldCheck, Sun, UserRound, Users, WandSparkles } from "lucide-react";
 import { BrandMark } from "./BrandMark";
 import { RouteProgress } from "./RouteProgress";
 import { SessionGuard } from "./SessionGuard";
@@ -16,7 +16,7 @@ const teacherLinks = [
   { href: "/teacher", label: "Ringkasan", icon: LayoutDashboard },
   { href: "/teacher/kelola-pembelajaran", label: "Kelola pembelajaran", icon: FolderKanban },
   { href: "/teacher/game-studio", label: "Mini-Game Studio", icon: Gamepad2, accent: true },
-  { href: "/teacher?tab=participants", label: "Peserta", icon: Users },
+  { href: "/teacher/peserta", label: "Peserta", icon: Users },
   { href: "/teacher?tab=analytics", label: "Analitik", icon: BarChart3 },
 ];
 
@@ -93,6 +93,9 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
             <span className="sync-pill">
               <span className="sync-dot" /> Tersimpan di perangkat
             </span>
+            <Link href="/profil" className="icon-button" aria-label="Kelola profil" title="Kelola profil">
+              <UserRound size={18} />
+            </Link>
             <button className="icon-button" onClick={toggleTheme} aria-label="Ganti tema">
               {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </button>
@@ -135,7 +138,7 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
             return <Link key={href} href={href} className={`nav-link ${active ? "is-active" : ""} ${accent ? "nav-link--accent" : ""}`}><Icon size={18} /><span>{label}</span>{accent && <span className="nav-spark">✦</span>}</Link>;
           })}
         </nav>
-        <div className="sidebar__bottom"><div className="sidebar__label">PREFERENSI</div><button className="nav-link nav-link--button" onClick={toggleTheme}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />} <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span></button><button className="nav-link nav-link--button" onClick={handleLogout}><LogOut size={18} /> <span>Keluar</span></button><Link href="/about" className="nav-link"><CircleHelp size={18} /><span>Tentang {appName}</span></Link><div className="sidebar-card"><WandSparkles size={19} /><div><strong>Ruang belajar hidup</strong><small>Bagikan link, lihat progres.</small></div></div></div>
+        <div className="sidebar__bottom"><div className="sidebar__label">PREFERENSI</div><Link href="/profil" className="nav-link"><UserRound size={18} /><span>Kelola profil</span></Link><button className="nav-link nav-link--button" onClick={toggleTheme}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />} <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span></button><button className="nav-link nav-link--button" onClick={handleLogout}><LogOut size={18} /> <span>Keluar</span></button><Link href="/about" className="nav-link"><CircleHelp size={18} /><span>Tentang {appName}</span></Link><div className="sidebar-card"><WandSparkles size={19} /><div><strong>Ruang belajar hidup</strong><small>Bagikan link, lihat progres.</small></div></div></div>
       </aside>
       <main className="main-canvas">{children}</main>
     </div>
