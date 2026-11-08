@@ -12,9 +12,27 @@ export function MetricCard({ label, value, delta, icon, tone = "violet" }: { lab
   return <div className={`metric-card metric-card--${tone}`}><div className="metric-card__top"><span className="metric-icon"><Icon size={18} /></span><ArrowUpRight size={16} className="metric-arrow" /></div><div className="metric-card__value">{value}</div><div className="metric-card__label">{label}</div><div className="metric-card__delta"><TrendingUp size={13} /> {delta}</div></div>;
 }
 
-export function ChartBars() {
-  const bars = [42, 58, 50, 76, 62, 84, 68, 92, 72, 98, 86, 100];
-  return <div className="chart-bars" aria-label="Grafik progres mingguan">{bars.map((height, index) => <div className="chart-bar-wrap" key={index}><div className="chart-bar" style={{ height: `${height}%`, animationDelay: `${index * 35}ms` }} /><span>{index % 3 === 0 ? ["2 Sep", "9 Sep", "16 Sep", "23 Sep"][index / 3] : ""}</span></div>)}</div>;
+export function ChartBars({ data }: { data?: Array<{ label: string; value: number; total?: number }> }) {
+  // Grafik memakai data mingguan dari database. Bila belum ada aktivitas,
+  // batang kosong dengan label minggu tetap ditampilkan agar tidak menipu.
+  const bars = data && data.length > 0 ? data : [];
+  if (bars.length === 0) {
+    return <div className="chart-empty">Belum ada aktivitas siswa untuk digambarkan.</div>;
+  }
+  return (
+    <div className="chart-bars" aria-label="Grafik progres mingguan">
+      {bars.map((bar, index) => (
+        <div className="chart-bar-wrap" key={`${bar.label}-${index}`}>
+          <div
+            className="chart-bar"
+            style={{ height: `${Math.max(bar.value, 2)}%`, animationDelay: `${index * 35}ms` }}
+            title={`${bar.total ?? 0} aktivitas selesai`}
+          />
+          <span>{bar.label}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function SectionTitle({ eyebrow, title, action }: { eyebrow?: string; title: string; action?: React.ReactNode }) {

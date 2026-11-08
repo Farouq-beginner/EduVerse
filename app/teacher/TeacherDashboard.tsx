@@ -31,6 +31,7 @@ import {
   type DbCourse,
   type ModuleAnalyticsRow,
   type ParticipantRow,
+  type ProgressTrendPoint,
   type StudentSubmissionRow,
   type TeacherActivityRow,
   type TeacherCourseCard,
@@ -71,6 +72,7 @@ export function TeacherDashboard({
   const [structure, setStructure] = useState<DbCourse | null>(null);
   const [structureLoading, setStructureLoading] = useState(false);
   const [analytics, setAnalytics] = useState<{ rows: ModuleAnalyticsRow[]; needsReview: number; topQuiz: string | null } | null>(null);
+  const [trend, setTrend] = useState<ProgressTrendPoint[]>([]);
   const [submissions, setSubmissions] = useState<StudentSubmissionRow[]>([]);
   const [activityRows, setActivityRows] = useState<TeacherActivityRow[]>([]);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantRow | null>(null);
@@ -103,6 +105,7 @@ export function TeacherDashboard({
       setAnalytics(null);
       setSubmissions([]);
       setActivityRows([]);
+      setTrend([]);
       return;
     }
 
@@ -121,6 +124,7 @@ export function TeacherDashboard({
         setAnalytics(workspace?.analytics ?? null);
         setSubmissions(workspace?.submissions ?? []);
         setActivityRows(workspace?.activity ?? []);
+        setTrend(workspace?.trend ?? []);
         setFilterSearchableTerm("");
       } catch {
         if (!active) return;
@@ -529,6 +533,9 @@ export function TeacherDashboard({
                   ))}
                 </select>
               )}
+              <Link href="/teacher/peserta" className="button button--ghost button--small">
+                <UsersRound size={15} /> Kelola peserta
+              </Link>
               <button className="button button--ghost button--small" onClick={exportCSV} disabled={!participants.length}>
                 <Download size={15} /> Unduh CSV
               </button>
@@ -718,10 +725,10 @@ export function TeacherDashboard({
             <div className="chart-panel__head">
               <div>
                 <strong>Progres penyelesaian</strong>
-                <small>Pertemuan yang selesai per minggu</small>
+                <small>Aktivitas selesai per minggu · dari database</small>
               </div>
             </div>
-            <ChartBars />
+            <ChartBars data={trend} />
           </div>
         </>
       )}
