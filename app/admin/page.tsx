@@ -27,6 +27,7 @@ import {
   type TeacherAccountRow,
 } from "@/lib/actions/dashboards";
 import { logoutUser } from "@/lib/actions/auth";
+import { AccountManager } from "./AccountManager";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -214,6 +215,8 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+
+      <AccountManager />
 
       <div className="admin-grid">
         <div className="admin-panel" id="teacher-accounts">
