@@ -1775,3 +1775,131 @@ h3 { font-size: 1.05rem; line-height: 1.25; }
   .sidebar__brand { display: flex; align-items: center; gap: 8px; }
   .mobile-actions { display: flex; }
 }
+
+/* ── Grafik tanpa data ─────────────────────────────────────────────────── */
+.chart-empty {
+  padding: 42px 18px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+/* ── Halaman kelola peserta ────────────────────────────────────────────── */
+.peserta-report { display: grid; gap: 14px; margin-top: 14px; }
+.peserta-meeting {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+.peserta-meeting summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 19px;
+  cursor: pointer;
+  list-style: none;
+}
+.peserta-meeting summary::-webkit-details-marker { display: none; }
+.peserta-meeting summary strong { display: block; font-size: 0.92rem; }
+.peserta-meeting summary small { display: block; margin-top: 4px; color: var(--muted); font-size: 0.68rem; }
+.peserta-meeting__count { color: var(--muted); font-size: 0.7rem; font-weight: 800; }
+.peserta-blocks { display: grid; gap: 12px; padding: 0 19px 19px; }
+.peserta-block { padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }
+.peserta-block__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.peserta-block__head strong { display: block; font-size: 0.82rem; }
+.peserta-block__head small { display: block; margin-top: 3px; color: var(--muted); font-size: 0.63rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.peserta-block__empty { margin-top: 10px; color: var(--muted); font-size: 0.7rem; }
+.peserta-quiz { margin-top: 12px; }
+.peserta-quiz__head { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.64rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+.peserta-attempt { margin-top: 9px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+.peserta-attempt__top { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.peserta-attempt__top strong { font-size: 0.74rem; }
+.peserta-attempt__top small { margin-left: auto; color: var(--muted); font-size: 0.63rem; }
+.peserta-answers { width: 100%; margin-top: 10px; border-collapse: collapse; }
+.peserta-answers th, .peserta-answers td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; font-size: 0.67rem; }
+.peserta-answers th { color: var(--muted); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.peserta-answers td:last-child { width: 26px; text-align: right; }
+.peserta-submission { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+.peserta-submission__top { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.peserta-submission__top small { margin-left: auto; color: var(--muted); font-size: 0.63rem; }
+.peserta-submission p { margin-top: 9px; color: var(--muted-strong); font-size: 0.72rem; line-height: 1.6; white-space: pre-wrap; }
+.peserta-submission .text-link { margin-top: 9px; }
+
+/* ── Halaman profil ───────────────────────────────────────────────────── */
+.profile-layout { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; align-items: start; gap: 18px; }
+.profile-card { display: grid; justify-items: center; gap: 10px; padding: 28px 22px; text-align: center; }
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  overflow: hidden;
+  border-radius: 32px;
+  color: #fff;
+  background: linear-gradient(140deg, var(--violet), #aa9aff);
+  font-family: 'Plus Jakarta Sans';
+  font-size: 1.7rem;
+  font-weight: 800;
+}
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-card strong { font-size: 0.95rem; }
+.profile-card > small { color: var(--muted); font-size: 0.7rem; }
+.profile-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
+.profile-note { margin-top: 10px; color: var(--muted); font-size: 0.65rem; line-height: 1.5; }
+.profile-form { display: grid; gap: 14px; padding: 24px; }
+.profile-form .button { justify-self: start; }
+.field-hint { color: var(--muted); font-size: 0.62rem; }
+
+/* ── Kelola akun di konsol Admin ──────────────────────────────────────── */
+.account-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 0; }
+.table-scroll { overflow-x: auto; }
+.row-actions { display: flex; gap: 5px; }
+.status-toggle { padding: 0; border: 0; background: transparent; cursor: pointer; }
+.admin-credential-note { margin-top: 18px; padding: 14px 16px; border: 1px dashed var(--line); border-radius: 13px; background: var(--surface-soft); }
+.admin-credential-note__head { display: flex; align-items: center; gap: 7px; color: var(--violet); font-size: 0.72rem; }
+.admin-credential-note p { margin-top: 8px; color: var(--muted); font-size: 0.68rem; line-height: 1.6; }
+.admin-credential-note ul { display: grid; gap: 6px; margin-top: 9px; }
+.admin-credential-note li strong { display: block; font-size: 0.74rem; }
+.admin-credential-note li small { color: var(--muted); font-size: 0.64rem; }
+
+/* ── Tema gelap untuk halaman siswa ───────────────────────────────────── */
+:root[data-theme='dark'] .student-surface { background: var(--bg); }
+:root[data-theme='dark'] .student-stat,
+:root[data-theme='dark'] .module-card,
+:root[data-theme='dark'] .student-profile-chip,
+:root[data-theme='dark'] .locked-card,
+:root[data-theme='dark'] .student-join__form,
+:root[data-theme='dark'] .empty-state-card,
+:root[data-theme='dark'] .reflection-card {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: none;
+}
+:root[data-theme='dark'] .lesson-item { border-color: var(--line); background: var(--surface-soft); }
+:root[data-theme='dark'] .lesson-item strong { color: var(--text); }
+:root[data-theme='dark'] .module-card__head strong { color: var(--text); }
+:root[data-theme='dark'] .student-hero-card { background: linear-gradient(120deg, #2b2550, #443a86 72%, #54479f); }
+:root[data-theme='dark'] .achievement-card { background: #302d55; }
+:root[data-theme='dark'] .achievement-card h3 { color: var(--text); }
+:root[data-theme='dark'] .achievement-card p { color: var(--muted); }
+:root[data-theme='dark'] .sync-card { border-color: #244a44; background: #16302c; }
+:root[data-theme='dark'] .sync-card__top { color: #73dfc5; }
+:root[data-theme='dark'] .sync-card p { color: #9fc9bd; }
+:root[data-theme='dark'] .student-join__form { border-left-color: var(--line); }
+:root[data-theme='dark'] .progress-ring__track { stroke: #2f2b52; }
+:root[data-theme='dark'] .table-progress { background: #2f2b52; }
+:root[data-theme='dark'] .quiz-option { background: var(--surface-soft); }
+:root[data-theme='dark'] .quiz-option.is-correct { background: #16302c; border-color: #244a44; color: #9fe6d3; }
+:root[data-theme='dark'] .quiz-option.is-wrong { background: #3a2327; border-color: #59323a; color: #f0b1ae; }
+:root[data-theme='dark'] .quiz-feedback.is-good { background: #16302c; color: #9fe6d3; }
+:root[data-theme='dark'] .quiz-feedback.is-explainer { background: #3a3524; color: #e8d69a; }
+:root[data-theme='dark'] .student-topbar { border-bottom: 1px solid transparent; }
+:root[data-theme='dark'] .locked-card__icon { background: #3a2327; }
+:root[data-theme='dark'] .locked-card__course { border-color: var(--line); }
+:root[data-theme='dark'] .student-course-card { border-color: var(--line); background: var(--surface); }
