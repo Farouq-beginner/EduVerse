@@ -5,6 +5,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   ClipboardCheck,
   Copy,
@@ -27,7 +28,6 @@ import { AppShell } from "@/components/AppShell";
 import { StatusPill } from "@/components/DashboardBits";
 import { Toast } from "@/components/Toast";
 import { DiscussionForum } from "@/components/DiscussionForum";
-import { CollabMeetingModal } from "@/components/CollabMeetings";
 import {
   blankWorksheet,
   gameTemplates,
@@ -44,7 +44,6 @@ import {
   saveCourseStructure,
   setCourseModuleDoc,
   updateCourseSettings,
-  type CourseMeetingRow,
   type DbCourse,
 } from "@/lib/actions/dashboards";
 import { deleteStoredFile } from "@/lib/actions/files";
@@ -116,8 +115,6 @@ export default function CourseBuilderPage() {
   const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [forumModule, setForumModule] = useState<Module | null>(null);
-  const [meetings, setMeetings] = useState<CourseMeetingRow[]>([]);
-  const [collabModule, setCollabModule] = useState<Module | null>(null);
 
   const dataRef = useRef({ meta, modules });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -187,7 +184,6 @@ export default function CourseBuilderPage() {
             : null
         );
         setModules(structure.modules.map(toModule));
-        setMeetings(data.meetings ?? []);
       } catch {
         if (active) setNotFound(true);
       } finally {
@@ -198,8 +194,6 @@ export default function CourseBuilderPage() {
       active = false;
     };
   }, [slug]);
-
-  // Link kolaborasi ikut terkirim bersama struktur course (satu request).
 
   /** Semua perubahan melewati gerbang draft: popup "Buat draft baru?" dulu. */
   function commit(next: { meta?: CourseMeta; modules?: Module[] }) {
@@ -759,14 +753,6 @@ export default function CourseBuilderPage() {
                     >
                       <Pencil size={14} /> Edit pertemuan
                     </button>
-                    <button className="button button--ghost button--small" onClick={() => setCollabModule(module)}>
-                      <Video size={14} /> Kolaborasi
-                      {meetings.filter((meeting) => meeting.moduleId === module.id).length > 0 && (
-                        <span className="collab-count">
-                          {meetings.filter((meeting) => meeting.moduleId === module.id).length}
-                        </span>
-                      )}
-                    </button>
                     <button className="button button--ghost button--small" onClick={() => setShowAdd(showAdd === module.id ? null : module.id)}>
                       <Plus size={15} /> Tambah materi
                     </button>
@@ -883,6 +869,32 @@ export default function CourseBuilderPage() {
               </div>
             ))
           )}
+          <div className="builder-extras">
+            <div className="section-title" style={{ marginBottom: 12 }}>
+              <div>
+                <div className="eyebrow">DI LUAR PERTEMUAN</div>
+                <h2>Kolaborasi &amp; game kelompok</h2>
+                <p className="section-subtitle">
+                  Kolaborasi berisi kumpulan link kelas, sedangkan game kelompok dipakai untuk tugas
+                  bersama dengan nilai tambahan.
+                </p>
+              </div>
+            </div>
+            <div className="builder-extra-grid">
+              <Link href={`/teacher/course/${slug}/kolaborasi`} className="builder-extra-card builder-extra-card--violet">
+                <span className="builder-extra-card__icon"><Video size={19} /></span>
+                <strong>Kolaborasi kelas</strong>
+                <small>Judul, deskripsi, dan banyak link (Zoom, Meet, Polypad, GeoGebra, PhET).</small>
+                <span className="text-link">Kelola kolaborasi <ArrowRight size={14} /></span>
+              </Link>
+              <Link href={`/teacher/course/${slug}/game`} className="builder-extra-card builder-extra-card--teal">
+                <span className="builder-extra-card__icon"><Gamepad2 size={19} /></span>
+                <strong>Game kelompok</strong>
+                <small>Room privat berisi maksimal 5 siswa, chat, tugas bersama, dan penilaian.</small>
+                <span className="text-link">Kelola room tugas <ArrowRight size={14} /></span>
+              </Link>
+            </div>
+          </div>
         </div>
 
         <aside className="builder-sidebar">
@@ -946,21 +958,6 @@ export default function CourseBuilderPage() {
           </div>
         </aside>
       </div>
-
-      {collabModule && (
-        <CollabMeetingModal
-          moduleId={collabModule.id}
-          moduleTitle={collabModule.title}
-          meetings={meetings.filter((meeting) => meeting.moduleId === collabModule.id)}
-          onChange={(rows) =>
-            setMeetings((current) => [
-              ...current.filter((meeting) => meeting.moduleId !== collabModule.id),
-              ...rows,
-            ])
-          }
-          onClose={() => setCollabModule(null)}
-        />
-      )}
 
       {showDraftPrompt && (
         <div className="modal-backdrop">
