@@ -24,7 +24,6 @@ import { AppShell } from "@/components/AppShell";
 import { ChartBars, MetricCard, SectionTitle, StatusPill } from "@/components/DashboardBits";
 import { Toast } from "@/components/Toast";
 import {
-  createTeacherCourse,
   getTeacherWorkspace,
   publishCourse,
   updateCourseSettings,
@@ -49,8 +48,6 @@ type Stats = {
 } | null;
 
 type Tab = "overview" | "participants" | "analytics";
-
-const emptyForm = { title: "", subject: "Matematika", grade: "Kelas VII", description: "" };
 
 export function TeacherDashboard({
   teacherName,
@@ -79,9 +76,6 @@ export function TeacherDashboard({
   const [search, setSearch] = useState("");
   const [filterSearchableTerm, setFilterSearchableTerm] = useState("");
   const [toast, setToast] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [createForm, setCreateForm] = useState(emptyForm);
-  const [creating, setCreating] = useState(false);
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.slug === selectedSlug) ?? courses[0] ?? null,
@@ -199,27 +193,6 @@ export function TeacherDashboard({
     );
   }
 
-  async function handleCreate(event: React.FormEvent) {
-    event.preventDefault();
-    if (creating) return;
-    if (!createForm.title.trim()) {
-      setToast("Judul pembelajaran wajib diisi.");
-      return;
-    }
-    setCreating(true);
-    const result = await createTeacherCourse(createForm);
-    setCreating(false);
-    if (!result.ok || !result.course) {
-      setToast(result.error ?? "Gagal membuat pembelajaran.");
-      return;
-    }
-    setCourses((current) => [result.course!, ...current]);
-    setCreateForm(emptyForm);
-    setShowCreate(false);
-    setToast("Pembelajaran baru dibuat. Yuk isi pertemuan pertamamu.");
-    router.push(`/teacher/course/${result.course.slug}`);
-  }
-
   const searchLower = search.trim().toLowerCase();
   const hasSearch = searchLower.length > 0;
 
@@ -285,9 +258,9 @@ export function TeacherDashboard({
           </p>
         </div>
         <div className="page-topbar__actions">
-          <button className="button button--primary button--small" onClick={() => setShowCreate(true)}>
+          <Link href="/teacher/kelola-pembelajaran" className="button button--primary button--small">
             <Plus size={15} /> Buat pembelajaran
-          </button>
+          </Link>
           <div className="user-pill">
             <span className="user-pill__avatar">{initials}</span>
             <div>
@@ -357,9 +330,9 @@ export function TeacherDashboard({
                   </span>
                   <strong>Workspace ini masih kosong</strong>
                   <p>Buat pembelajaran baru. Data pertemuan, peserta, dan jawaban akan tersimpan di akunmu sendiri.</p>
-                  <button className="button button--primary button--small" onClick={() => setShowCreate(true)}>
+                  <Link href="/teacher/kelola-pembelajaran" className="button button--primary button--small">
                     <Plus size={15} /> Buat pembelajaran pertama
-                  </button>
+                  </Link>
                 </div>
               ) : (
                 <div style={{ display: "grid", gap: 14 }}>
@@ -731,63 +704,6 @@ export function TeacherDashboard({
             <ChartBars data={trend} />
           </div>
         </>
-      )}
-
-      {showCreate && (
-        <div className="modal-backdrop" onClick={() => setShowCreate(false)}>
-          <form className="modal-card" onClick={(event) => event.stopPropagation()} onSubmit={handleCreate}>
-            <div className="modal-card__head">
-              <div>
-                <div className="eyebrow">PEMBELAJARAN BARU</div>
-                <h2>Mulai ruang belajar baru.</h2>
-              </div>
-              <button type="button" className="icon-button" onClick={() => setShowCreate(false)} aria-label="Tutup">
-                ×
-              </button>
-            </div>
-            <div className="form-grid">
-              <div className="field field--full">
-                <label>Judul pembelajaran</label>
-                <input
-                  autoFocus
-                  value={createForm.title}
-                  onChange={(event) => setCreateForm((current) => ({ ...current, title: event.target.value }))}
-                  placeholder="Contoh: Pecahan Senilai — Kelas VII"
-                />
-              </div>
-              <div className="field field--full">
-                <label>Deskripsi</label>
-                <textarea
-                  value={createForm.description}
-                  onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))}
-                  placeholder="Ringkasan singkat yang dilihat siswa."
-                />
-              </div>
-              <div className="field">
-                <label>Mata pelajaran</label>
-                <select value={createForm.subject} onChange={(event) => setCreateForm((current) => ({ ...current, subject: event.target.value }))}>
-                  <option>Matematika</option>
-                  <option>IPA</option>
-                  <option>Bahasa Indonesia</option>
-                  <option>IPS</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>Target kelas</label>
-                <select value={createForm.grade} onChange={(event) => setCreateForm((current) => ({ ...current, grade: event.target.value }))}>
-                  <option>Kelas VII</option>
-                  <option>Kelas VIII</option>
-                  <option>Kelas IX</option>
-                </select>
-              </div>
-            </div>
-            <button className="button button--primary" style={{ width: "100%", marginTop: 18 }} type="submit" disabled={creating}>
-              {creating ? <Loader2 size={16} className="spin" /> : <ArrowRight size={16} />}
-              {creating ? "Membuat..." : "Buat pembelajaran"}
-            </button>
-            <p className="modal-note">Pembelajaran dibuat di akunmu. Guru lain tidak dapat membuka atau mengubahnya.</p>
-          </form>
-        </div>
       )}
 
       {selectedParticipant && (

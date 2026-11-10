@@ -508,6 +508,34 @@ export async function createTeacherCourse(input: {
   }
 }
 
+/**
+ * Hapus pembelajaran milik guru. Semua isi (pertemuan, materi, enrollmen,
+ * kolaborasi, room kelompok) ikut terhapus lewat cascade di database.
+ */
+export async function deleteTeacherCourse(
+  courseId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const me = await getSessionProfile();
+    if (!me || me.role !== "TEACHER" || !me.isActive)
+      return { ok: false, error: "Hanya guru yang boleh menghapus pembelajaran." };
+
+    const course = await prisma.course.findFirst({
+      where: { id: courseId, ownerId: me.id },
+      select: { id: true, slug: true },
+    });
+    if (!course) return { ok: false, error: "Pembelajaran tidak ditemukan atau bukan milikmu." };
+
+    await prisma.course.delete({ where: { id: course.id } });
+    revalidateTag(`teacher-courses-${me.id}`);
+    revalidateTag(`teacher-stats-${me.id}`);
+    revalidateTag(`course-${course.slug}`);
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Gagal menghapus pembelajaran. Coba lagi." };
+  }
+}
+
 /** Simpan judul/deskripsi pembelajaran dari course builder. */
 /**
  * Satu pintu data workspace guru: profil dibaca sekali, lalu peserta, modul,
