@@ -89,6 +89,9 @@ ditandai centang. Jenis blok dan cara mengerjakannya:
   penanda kapasitas (`1/5`, `2/5`, …), lalu menekan **Gabung kelompok** — tanpa kode.
 - Kelompok yang sudah `5/5` berubah menjadi **Penuh** dan tidak bisa dimasuki; siswa memilih
   kelompok lain. Satu siswa hanya berada di satu kelompok per pembelajaran.
+- Jumlah anggota diperbarui otomatis setiap beberapa detik (tanpa reload), jadi saat siswa lain
+  bergabung penanda langsung berubah dari `0/5` ke `1/5` dan seterusnya. Guru juga melihat
+  jumlah anggota terbaru di halaman kelola kelompok.
 - Tugas kelompok baru tampil setelah masuk room: chat anggota, tugas bersama (semua anggota
   boleh menambah/mengedit/menghapus), dan nilai dari guru. Setelah dinilai atau deadline
   lewat, tugas dan chat terkunci.

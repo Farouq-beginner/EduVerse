@@ -70,18 +70,41 @@ export default function StudentGroupGamePage() {
     };
   }, [loadRooms]);
 
+  // Jumlah anggota berubah saat siswa lain bergabung, jadi daftar disegarkan berkala.
+  useEffect(() => {
+    if (room) return;
+    const timer = setInterval(() => {
+      void loadRooms().catch(() => undefined);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [room?.id, loadRooms]);
+
+  // Segarkan segera saat tab kembali aktif, mis. setelah berganti akun.
+  useEffect(() => {
+    function sync() {
+      void loadRooms().catch(() => undefined);
+    }
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [loadRooms]);
+
   const refreshRoom = useCallback(async (roomId: string) => {
     const data = await getStudentRoom(roomId);
     if (data) setRoom(data);
     return data;
   }, []);
 
-  // Chat dan tugas diperbarui berkala supaya anggota kelompok melihat pesan baru.
+  // Chat, tugas, dan anggota kelompok diperbarui berkala supaya perubahan terlihat
+  // tanpa perlu refresh manual.
   useEffect(() => {
     if (!room) return;
     const timer = setInterval(() => {
       void refreshRoom(room.id);
-    }, 6000);
+    }, 4000);
     return () => clearInterval(timer);
   }, [room?.id, refreshRoom]);
 

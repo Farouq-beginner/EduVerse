@@ -72,6 +72,43 @@ export default function TeacherGroupGamePage() {
     setRooms(data.rooms);
   }
 
+  // Jumlah anggota berubah saat siswa bergabung, jadi daftar mengikuti secara berkala.
+  useEffect(() => {
+    if (!courseId) return;
+    const timer = setInterval(() => {
+      void getTeacherGroupRooms(courseId)
+        .then((data) => setRooms(data.rooms))
+        .catch(() => undefined);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [courseId]);
+
+  useEffect(() => {
+    if (!courseId) return;
+    function sync() {
+      void getTeacherGroupRooms(courseId!)
+        .then((data) => setRooms(data.rooms))
+        .catch(() => undefined);
+    }
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [courseId]);
+
+  useEffect(() => {
+    if (!detail) return;
+    const timer = setInterval(() => {
+      void getTeacherRoom(detail.id)
+        .then((room) => {
+          if (room) setDetail(room);
+        })
+        .catch(() => undefined);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [detail?.id]);
   useEffect(() => {
     let active = true;
     (async () => {
