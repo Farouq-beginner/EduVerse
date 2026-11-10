@@ -81,7 +81,20 @@ ditandai centang. Jenis blok dan cara mengerjakannya:
 - Kumpulan game dari pembelajaran yang diikuti (dicek dulu apakah siswa sudah bergabung).
 - Siswa bermain sesi game dan skornya tercatat bila game tersebut dinilai.
 
-## 7. Progres dan Sinkronisasi
+## 7. Kelompok dan Room Tugas (`/learn/[slug]/game`)
+
+- Guru membuat kelompok dari course builder (kartu paling bawah). Setiap kelompok maksimal
+  5 siswa dan dapat diberi instruksi serta deadline opsional.
+- Siswa membuka kartu **Game nilai tambah** di sidebar, melihat daftar kelompok beserta
+  penanda kapasitas (`1/5`, `2/5`, …), lalu menekan **Gabung kelompok** — tanpa kode.
+- Kelompok yang sudah `5/5` berubah menjadi **Penuh** dan tidak bisa dimasuki; siswa memilih
+  kelompok lain. Satu siswa hanya berada di satu kelompok per pembelajaran.
+- Tugas kelompok baru tampil setelah masuk room: chat anggota, tugas bersama (semua anggota
+  boleh menambah/mengedit/menghapus), dan nilai dari guru. Setelah dinilai atau deadline
+  lewat, tugas dan chat terkunci.
+- Akun uji tersedia di [akun-dummy.md](akun-dummy.md).
+
+## 8. Progres dan Sinkronisasi
 
 - Setiap blok yang ditandai selesai (termasuk setelah mengirim lembar kerja) memanggil
   `markBlockComplete` / `syncBlockCompletions` → persentase progres course ikut ter-update di

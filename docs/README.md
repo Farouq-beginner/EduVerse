@@ -10,6 +10,7 @@ alur masing-masing. Dokumen ini menjelaskan alur pemakaian web dari awal sampai 
 |---|---|
 | [alur-guru.md](alur-guru.md) | Alur lengkap guru: login → dashboard → course builder → draft & publish → kuis → game studio → forum |
 | [alur-siswa.md](alur-siswa.md) | Alur lengkap siswa: login → pilih pembelajaran → belajar → lembar kerja/kuis → progres |
+| [akun-dummy.md](akun-dummy.md) | Tujuh akun siswa dummy (email + password) untuk menguji kelompok/room tugas |
 
 ## Gambaran Umum Sistem
 
