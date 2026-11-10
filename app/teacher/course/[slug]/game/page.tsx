@@ -175,14 +175,18 @@ export default function TeacherGroupGamePage() {
           <Link href={`/teacher/course/${slug}`} className="back-link">
             <ArrowLeft size={14} /> Kembali ke course builder
           </Link>
-          <div className="eyebrow" style={{ marginTop: 12 }}>
-            DI LUAR PERTEMUAN · GAME KELOMPOK
-          </div>
-          <h1>{detail ? detail.name : "Room tugas kelompok"}</h1>
-          <p>
-            Setiap room maksimal 5 siswa dan hanya bisa dibuka dengan kode kelompok. Guru dapat
-            membaca chat, melihat tugas, dan memberi nilai tambahan.
-          </p>
+          {!detail && (
+            <>
+              <div className="eyebrow" style={{ marginTop: 12 }}>
+                DI LUAR PERTEMUAN · GAME KELOMPOK
+              </div>
+              <h1>Room tugas kelompok</h1>
+              <p>
+                Setiap room maksimal 5 siswa dan hanya bisa dibuka dengan kode kelompok. Guru dapat
+                membaca chat, melihat tugas, dan memberi nilai tambahan.
+              </p>
+            </>
+          )}
         </div>
         <div className="page-topbar__actions">
           {detail ? (
