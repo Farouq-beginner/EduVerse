@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Clock3,
   Gamepad2,
-  KeyRound,
   Loader2,
   MessageCircle,
   Pencil,
@@ -44,8 +43,7 @@ export default function StudentGroupGamePage() {
   const [courseTitle, setCourseTitle] = useState("");
   const [rooms, setRooms] = useState<GroupRoomSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [code, setCode] = useState("");
-  const [joining, setJoining] = useState(false);
+  const [joining, setJoining] = useState<string | null>(null);
   const [room, setRoom] = useState<GroupRoomDetail | null>(null);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -87,15 +85,11 @@ export default function StudentGroupGamePage() {
     return () => clearInterval(timer);
   }, [room?.id, refreshRoom]);
 
-  async function join() {
+  async function join(roomId: string) {
     if (joining) return;
-    if (!code.trim()) {
-      setToast("Masukkan kode kelompok dari gurumu.");
-      return;
-    }
-    setJoining(true);
-    const result = await joinGroupRoom({ slug, code });
-    setJoining(false);
+    setJoining(roomId);
+    const result = await joinGroupRoom(roomId);
+    setJoining(null);
     if (!result.ok || !result.roomId) {
       setToast(result.error ?? "Gagal bergabung ke kelompok.");
       return;
@@ -106,7 +100,6 @@ export default function StudentGroupGamePage() {
       setToast("Kelompok ditemukan, tetapi room belum bisa dibuka.");
       return;
     }
-    setCode("");
     setToast("Kamu bergabung ke kelompok.");
   }
 
@@ -185,9 +178,6 @@ export default function StudentGroupGamePage() {
                 <div className="eyebrow">ROOM KELOMPOK · {courseTitle.toUpperCase()}</div>
                 <h1>{room.name}</h1>
                 <div className="group-room__meta">
-                  <span className="room-code">
-                    <KeyRound size={12} /> Kode {room.code}
-                  </span>
                   <span>
                     <UsersRound size={13} /> {room.members.length}/{room.maxMembers} anggota
                   </span>
@@ -385,31 +375,13 @@ export default function StudentGroupGamePage() {
                 <h1>Room tugas kelompok</h1>
                 <p>
                   {courseTitle ? `${courseTitle} · ` : ""}
-                  Gabung dengan kode kelompok dari gurumu. Setiap room maksimal 5 siswa dan bersifat
-                  privat.
+                  Pilih kelompok lalu tekan Gabung. Setiap kelompok maksimal 5 siswa; kelompok yang
+                  sudah penuh harus dilewati.
                 </p>
               </div>
               <Link href={`/learn/${slug}/kolaborasi`} className="button button--ghost button--small">
                 <Gamepad2 size={15} /> Kolaborasi
               </Link>
-            </div>
-
-            <div className="join-room-card">
-              <div>
-                <strong>Punya kode kelompok?</strong>
-                <small>Masukkan kode dari guru untuk masuk ke room kelompokmu.</small>
-              </div>
-              <div className="join-room-card__row">
-                <input
-                  value={code}
-                  onChange={(event) => setCode(event.target.value.toUpperCase())}
-                  placeholder="Contoh: K4B9XM"
-                  maxLength={8}
-                />
-                <button className="button button--primary button--small" onClick={join} disabled={joining}>
-                  {joining ? <Loader2 size={14} className="spin" /> : <KeyRound size={14} />} Gabung
-                </button>
-              </div>
             </div>
 
             {loading ? (
@@ -422,8 +394,8 @@ export default function StudentGroupGamePage() {
                 <span className="empty-state__icon">
                   <Gamepad2 size={24} />
                 </span>
-                <strong>Belum ada room kelompok</strong>
-                <p>Guru belum membuka game kelompok untuk pembelajaran ini.</p>
+                <strong>Belum ada kelompok</strong>
+                <p>Guru belum membuka kelompok untuk pembelajaran ini.</p>
                 <Link href={`/learn/${slug}`} className="button button--ghost button--small">
                   <ArrowLeft size={14} /> Kembali
                 </Link>
@@ -438,7 +410,6 @@ export default function StudentGroupGamePage() {
                       </span>
                       <div>
                         <strong>{item.name}</strong>
-                        <small>{item.instructions || "Tugas kelompok dari guru"}</small>
                       </div>
                       <StatusPill
                         tone={item.graded ? "teal" : item.joined ? "violet" : item.full ? "coral" : "yellow"}
@@ -448,12 +419,8 @@ export default function StudentGroupGamePage() {
                     </div>
                     <div className="group-card__meta">
                       <span>
-                        <UsersRound size={13} /> {item.memberCount}/{item.maxMembers}
+                        <UsersRound size={13} /> {item.memberCount}/{item.maxMembers} siswa
                       </span>
-                      <span>
-                        <MessageCircle size={13} /> {item.messageCount}
-                      </span>
-                      <span>{item.taskCount} tugas</span>
                       <span>
                         <Clock3 size={13} />{" "}
                         {item.deadline ? new Date(item.deadline).toLocaleDateString("id-ID") : "Tanpa deadline"}
@@ -465,9 +432,18 @@ export default function StudentGroupGamePage() {
                           Buka room
                         </button>
                       ) : (
-                        <span className="field-hint">
-                          {item.full ? "Room penuh — pilih kelompok lain." : "Butuh kode kelompok untuk masuk."}
-                        </span>
+                        <button
+                          className="button button--primary button--small"
+                          onClick={() => join(item.id)}
+                          disabled={item.full || joining !== null}
+                        >
+                          {joining === item.id ? (
+                            <Loader2 size={14} className="spin" />
+                          ) : (
+                            <UsersRound size={14} />
+                          )}
+                          {item.full ? "Penuh" : "Gabung kelompok"}
+                        </button>
                       )}
                     </div>
                   </article>

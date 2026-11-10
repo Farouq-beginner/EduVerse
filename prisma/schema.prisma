@@ -200,8 +200,6 @@ model GroupRoom {
   id           String            @id @default(cuid())
   courseId     String
   name         String
-  /// Kode kelompok unik yang dibagikan guru ke anggotanya.
-  code         String            @unique
   instructions String            @default("")
   maxMembers   Int               @default(5)
   deadline     DateTime?

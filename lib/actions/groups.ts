@@ -25,7 +25,6 @@ export type GroupTaskRow = {
 export type GroupRoomSummary = {
   id: string;
   name: string;
-  code: string | null;
   instructions: string;
   maxMembers: number;
   memberCount: number;
@@ -39,7 +38,6 @@ export type GroupRoomSummary = {
 export type GroupRoomDetail = {
   id: string;
   name: string;
-  code: string;
   instructions: string;
   maxMembers: number;
   deadline: string | null;
@@ -54,16 +52,6 @@ export type GroupRoomDetail = {
   messages: GroupMessageRow[];
   tasks: GroupTaskRow[];
 };
-
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function makeCode(length = 6) {
-  let value = "";
-  for (let index = 0; index < length; index += 1) {
-    value += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
-  }
-  return value;
-}
 
 function isLocked(room: { grade: number | null; deadline: Date | null }) {
   if (room.grade !== null) return true;
@@ -118,7 +106,7 @@ async function membership(roomId: string, studentId: string) {
 
 /* ── Sisi siswa ────────────────────────────────────────────────────────── */
 
-/** Daftar room pada pembelajaran yang diikuti siswa (kode hanya untuk anggota). */
+/** Daftar kelompok pada pembelajaran yang diikuti siswa. */
 export async function getStudentGroupRooms(slug: string): Promise<{
   courseTitle: string;
   rooms: GroupRoomSummary[];
@@ -146,7 +134,6 @@ export async function getStudentGroupRooms(slug: string): Promise<{
         return {
           id: room.id,
           name: room.name,
-          code: joined ? room.code : null,
           instructions: room.instructions,
           maxMembers: room.maxMembers,
           memberCount,
@@ -164,35 +151,42 @@ export async function getStudentGroupRooms(slug: string): Promise<{
   }
 }
 
-/** Gabung room memakai kode kelompok. Kapasitas dicek di server. */
-export async function joinGroupRoom(input: {
-  slug: string;
-  code: string;
-}): Promise<{ ok: boolean; error?: string; roomId?: string }> {
+/** Gabung room langsung dari daftar kelompok. Kapasitas dicek di server. */
+export async function joinGroupRoom(
+  roomId: string
+): Promise<{ ok: boolean; error?: string; roomId?: string }> {
   try {
     const me = await studentProfile();
     if (!me) return { ok: false, error: "Masuk sebagai siswa untuk bergabung ke kelompok." };
-    const course = await enrolledCourse(me.id, input.slug);
-    if (!course) return { ok: false, error: "Kamu belum tergabung di pembelajaran ini." };
 
-    const code = input.code.trim().toUpperCase();
-    if (!code) return { ok: false, error: "Masukkan kode kelompok dari gurumu." };
-
-    const room = await prisma.groupRoom.findFirst({
-      where: { courseId: course.id, code },
-      include: { members: { select: { studentId: true } } },
+    const room = await prisma.groupRoom.findUnique({
+      where: { id: roomId },
+      include: {
+        course: { select: { id: true, slug: true } },
+        members: { select: { studentId: true } },
+      },
     });
-    if (!room) return { ok: false, error: "Kode kelompok tidak ditemukan di pembelajaran ini." };
+    if (!room) return { ok: false, error: "Kelompok tidak ditemukan." };
+
+    const course = await enrolledCourse(me.id, room.course.slug);
+    if (!course) return { ok: false, error: "Kamu belum tergabung di pembelajaran ini." };
 
     if (room.members.some((member) => member.studentId === me.id))
       return { ok: true, roomId: room.id };
 
     if (room.members.length >= room.maxMembers)
-      return { ok: false, error: "Kelompok ini sudah penuh. Pilih kelompok lain." };
+      return {
+        ok: false,
+        error: `Kelompok ini sudah penuh (${room.members.length}/${room.maxMembers}). Pilih kelompok lain.`,
+      };
 
-    await prisma.groupRoomMember.create({
-      data: { roomId: room.id, studentId: me.id },
-    });
+    // Satu siswa hanya masuk satu kelompok per pembelajaran.
+    await prisma.$transaction([
+      prisma.groupRoomMember.deleteMany({
+        where: { studentId: me.id, room: { courseId: room.course.id } },
+      }),
+      prisma.groupRoomMember.create({ data: { roomId: room.id, studentId: me.id } }),
+    ]);
 
     return { ok: true, roomId: room.id };
   } catch {
@@ -223,7 +217,6 @@ export async function getStudentRoom(roomId: string): Promise<GroupRoomDetail | 
     return {
       id: room.id,
       name: room.name,
-      code: room.code,
       instructions: room.instructions,
       maxMembers: room.maxMembers,
       deadline: room.deadline?.toISOString() ?? null,
@@ -452,7 +445,6 @@ export async function getTeacherGroupRooms(courseId: string): Promise<{
       rooms: rooms.map((room) => ({
         id: room.id,
         name: room.name,
-        code: room.code,
         instructions: room.instructions,
         maxMembers: room.maxMembers,
         memberCount: room.members.length,
@@ -489,10 +481,6 @@ export async function createGroupRoom(input: {
     if (!name) return { ok: false, error: "Nama kelompok wajib diisi." };
 
     const maxMembers = Math.min(5, Math.max(1, Math.round(input.maxMembers ?? 5)));
-    let code = makeCode();
-    while (await prisma.groupRoom.findUnique({ where: { code }, select: { id: true } })) {
-      code = makeCode();
-    }
 
     const deadline = input.deadline ? new Date(input.deadline) : null;
     if (deadline && Number.isNaN(deadline.getTime()))
@@ -502,7 +490,6 @@ export async function createGroupRoom(input: {
       data: {
         courseId: course.id,
         name,
-        code,
         instructions: input.instructions?.trim() ?? "",
         maxMembers,
         deadline,
@@ -597,7 +584,6 @@ export async function getTeacherRoom(roomId: string): Promise<GroupRoomDetail | 
     return {
       id: room.id,
       name: room.name,
-      code: room.code,
       instructions: room.instructions,
       maxMembers: room.maxMembers,
       deadline: room.deadline?.toISOString() ?? null,

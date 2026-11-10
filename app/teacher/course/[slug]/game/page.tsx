@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Clock3,
-  Copy,
   Gamepad2,
   Loader2,
   MessageCircle,
@@ -129,7 +128,7 @@ export default function TeacherGroupGamePage() {
     }
     setDraft(null);
     await refresh(courseId);
-    setToast(draft.id ? "Kelompok diperbarui." : "Kelompok dibuat. Bagikan kodenya ke siswa.");
+    setToast(draft.id ? "Kelompok diperbarui." : "Kelompok dibuat. Siswa bisa langsung bergabung.");
   }
 
   async function removeRoom(room: GroupRoomSummary) {
@@ -163,11 +162,6 @@ export default function TeacherGroupGamePage() {
     setToast("Nilai kelompok tersimpan. Jawaban siswa terkunci.");
   }
 
-  function copyCode(code: string) {
-    navigator.clipboard?.writeText(code);
-    setToast(`Kode ${code} disalin.`);
-  }
-
   return (
     <AppShell>
       <div className="page-topbar">
@@ -182,8 +176,8 @@ export default function TeacherGroupGamePage() {
               </div>
               <h1>Room tugas kelompok</h1>
               <p>
-                Setiap room maksimal 5 siswa dan hanya bisa dibuka dengan kode kelompok. Guru dapat
-                membaca chat, melihat tugas, dan memberi nilai tambahan.
+                Setiap kelompok maksimal 5 siswa dan siswa bergabung sendiri dari halaman mereka. Guru
+                dapat membaca chat, melihat tugas, dan memberi nilai tambahan.
               </p>
             </>
           )}
@@ -216,9 +210,6 @@ export default function TeacherGroupGamePage() {
               <div className="eyebrow">RUANG PRIVAT KELOMPOK</div>
               <h2>{detail.name}</h2>
               <div className="group-room__meta">
-                <button className="room-code" onClick={() => copyCode(detail.code)}>
-                  Kode {detail.code} <Copy size={12} />
-                </button>
                 <span>
                   <UsersRound size={13} /> {detail.members.length}/{detail.maxMembers} siswa
                 </span>
@@ -357,7 +348,7 @@ export default function TeacherGroupGamePage() {
             <Gamepad2 size={22} />
           </span>
           <strong>Belum ada room kelompok</strong>
-          <p>Buat kelompok pertama, tentukan slot siswa, lalu bagikan kode kelompoknya.</p>
+          <p>Buat kelompok pertama, tentukan slot siswa, lalu siswa bergabung sendiri.</p>
           <button className="button button--primary button--small" onClick={() => setDraft({ ...emptyDraft })}>
             <Plus size={15} /> Buat kelompok
           </button>
@@ -372,7 +363,9 @@ export default function TeacherGroupGamePage() {
                 </span>
                 <div>
                   <strong>{room.name}</strong>
-                  <small>Kode {room.code}</small>
+                  <small>
+                    {room.memberCount}/{room.maxMembers} siswa bergabung
+                  </small>
                 </div>
                 <StatusPill tone={room.graded ? "teal" : room.full ? "coral" : "yellow"}>
                   {room.graded ? "Sudah dinilai" : room.full ? "Penuh" : "Terbuka"}
@@ -431,7 +424,7 @@ export default function TeacherGroupGamePage() {
               <div>
                 <div className="eyebrow">ROOM TUGAS KELOMPOK</div>
                 <h2>{draft.id ? "Edit kelompok" : "Kelompok baru"}</h2>
-                <p>Kode kelompok dibuat otomatis dan hanya bisa dipakai di pembelajaran ini.</p>
+                <p>Siswa bergabung sendiri dari halaman kelompok; tidak perlu kode.</p>
               </div>
               <button className="icon-button" onClick={() => setDraft(null)} aria-label="Tutup">
                 <X size={16} />
