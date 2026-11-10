@@ -405,6 +405,29 @@ export default function StudentLearningPage() {
                 <span style={{ width: `${progress}%` }} />
               </div>
             </div>
+
+            <Link href={`/learn/${courseSlug}/kolaborasi`} className="student-rail-card student-rail-card--violet">
+              <span className="student-rail-card__icon">
+                <Sparkles size={16} />
+              </span>
+              <div>
+                <strong>Kolaborasi</strong>
+                <small>Link kelas dari gurumu</small>
+              </div>
+              <ChevronRight size={15} />
+            </Link>
+
+            <Link href={`/learn/${courseSlug}/game`} className="student-rail-card student-rail-card--teal">
+              <span className="student-rail-card__icon">
+                <Gamepad2 size={16} />
+              </span>
+              <div>
+                <strong>Game nilai tambah</strong>
+                <small>Room tugas kelompok</small>
+              </div>
+              <Trophy size={15} />
+            </Link>
+
             <div className="sync-card">
               <div className="sync-card__top">
                 <RefreshCw size={16} />

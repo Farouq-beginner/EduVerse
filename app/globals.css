@@ -1903,3 +1903,307 @@ h3 { font-size: 1.05rem; line-height: 1.25; }
 :root[data-theme='dark'] .locked-card__icon { background: #3a2327; }
 :root[data-theme='dark'] .locked-card__course { border-color: var(--line); }
 :root[data-theme='dark'] .student-course-card { border-color: var(--line); background: var(--surface); }
+
+/* ── Pintasan builder: kolaborasi & game ──────────────────────────────── */
+.builder-extras { margin-top: 22px; }
+.builder-extra-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.builder-extra-card {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: inherit;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  text-decoration: none;
+}
+.builder-extra-card--violet { background: linear-gradient(145deg, #f4f1ff, var(--surface)); }
+.builder-extra-card--teal { background: linear-gradient(145deg, #eafaf5, var(--surface)); }
+.builder-extra-card strong { font-size: 0.92rem; }
+.builder-extra-card small { color: var(--muted); font-size: 0.7rem; line-height: 1.55; }
+.builder-extra-card__icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  color: var(--violet);
+  background: #fff;
+  box-shadow: var(--shadow-soft);
+}
+.builder-extra-card--teal .builder-extra-card__icon { color: var(--teal); }
+.builder-extra-card .text-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 0.7rem; font-weight: 800; }
+
+/* ── Halaman kolaborasi ───────────────────────────────────────────────── */
+.collab-page { display: grid; gap: 14px; }
+.collab-edit-card, .collab-student-card {
+  position: relative;
+  padding: 20px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+.collab-edit-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.collab-edit-card__head strong { display: block; font-size: 1rem; }
+.collab-edit-card__head p { margin-top: 5px; color: var(--muted); font-size: 0.75rem; line-height: 1.55; }
+.collab-edit-card__links, .collab-student-card__links { display: grid; gap: 8px; margin-top: 15px; }
+.collab-edit-link, .collab-student-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: inherit;
+  background: var(--surface-soft);
+  text-decoration: none;
+}
+.collab-edit-link span {
+  padding: 3px 7px;
+  border-radius: 6px;
+  color: var(--violet);
+  background: #fff;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.collab-edit-link strong { flex: 1; font-size: 0.74rem; }
+.collab-edit-card__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
+.collab-link-editor { display: grid; gap: 9px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.collab-link-editor__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.8rem; }
+.collab-link-row { display: grid; grid-template-columns: minmax(120px, 0.7fr) minmax(0, 2fr) 34px; gap: 8px; align-items: center; }
+.collab-link-row input {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 0.72rem;
+  outline: 0;
+}
+.collab-student-card__bar { position: absolute; inset: 0 auto 0 0; width: 5px; border-radius: 18px 0 0 18px; background: var(--violet); }
+.collab-student-card__bar--teal { background: var(--teal); }
+.collab-student-card__bar--yellow { background: var(--yellow); }
+.collab-student-card__bar--coral { background: var(--coral); }
+.collab-student-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-left: 10px; }
+.collab-student-card__head strong { display: block; font-size: 1rem; }
+.collab-student-card__head p { margin-top: 5px; color: var(--muted); font-size: 0.75rem; line-height: 1.55; }
+.collab-student-card__links { padding-left: 10px; }
+.collab-student-link__icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: #fff; background: var(--violet); }
+.collab-student-link__copy { flex: 1; }
+.collab-student-link__copy strong { display: block; font-size: 0.76rem; }
+.collab-student-link__copy small { display: block; margin-top: 2px; color: var(--muted); font-size: 0.62rem; }
+
+/* ── Member & grup ────────────────────────────────────────────────────── */
+.member-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.member-chip {
+  display: grid;
+  gap: 1px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.member-chip strong { font-size: 0.68rem; }
+.member-chip small { color: var(--muted); font-size: 0.58rem; }
+
+/* ── Room tugas kelompok ──────────────────────────────────────────────── */
+.group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.group-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+.group-card__head { display: flex; align-items: center; gap: 11px; }
+.group-card__head > div { flex: 1; min-width: 0; }
+.group-card__head strong { display: block; font-size: 0.86rem; }
+.group-card__head small { display: block; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 0.64rem; text-overflow: ellipsis; white-space: nowrap; }
+.group-card__icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; color: var(--teal); background: #e2f8f3; }
+.group-card__meta { display: flex; flex-wrap: wrap; gap: 5px 12px; color: var(--muted); font-size: 0.63rem; }
+.group-card__meta span { display: inline-flex; align-items: center; gap: 4px; }
+.group-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.group-card__actions .field-hint { flex: 1; }
+.join-room-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #f4f1ff, var(--surface));
+  box-shadow: var(--shadow-soft);
+}
+.join-room-card strong { display: block; font-size: 0.86rem; }
+.join-room-card small { display: block; margin-top: 3px; color: var(--muted); font-size: 0.67rem; }
+.join-room-card__row { display: flex; gap: 8px; }
+.join-room-card__row input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  font-family: 'Plus Jakarta Sans';
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  outline: 0;
+}
+.group-room { display: grid; gap: 16px; }
+.group-room__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 22px;
+  border-radius: 20px;
+  color: #fff;
+  background: linear-gradient(125deg, #403679, #6456c4 70%, #7b6be2);
+  box-shadow: 0 16px 32px rgba(72, 59, 148, 0.2);
+}
+.group-room__head h1, .group-room__head h2 { margin-top: 6px; color: #fff; font-size: 1.5rem; }
+.group-room__meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-size: 0.66rem; }
+.group-room__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  color: #ece9ff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.group-room__instructions { margin-top: 12px; max-width: 660px; color: #d8d3ff; font-size: 0.76rem; line-height: 1.6; }
+.room-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #3d327d;
+  background: #fff;
+  font-family: 'Plus Jakarta Sans';
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.group-room__grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); align-items: start; gap: 16px; }
+.grade-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #bfe9d8;
+  border-radius: 14px;
+  color: #1f6b56;
+  background: #e5f8ef;
+}
+.grade-banner strong { display: block; font-size: 0.82rem; }
+.grade-banner small { display: block; margin-top: 3px; font-size: 0.66rem; }
+
+/* ── Chat & tugas ─────────────────────────────────────────────────────── */
+.chat-panel { display: grid; align-content: start; }
+.chat-log { display: grid; gap: 8px; max-height: 330px; padding-right: 4px; overflow-y: auto; }
+.chat-bubble { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
+.chat-bubble__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.chat-bubble__head strong { font-size: 0.66rem; }
+.chat-bubble__head small { color: var(--muted); font-size: 0.57rem; }
+.chat-bubble p { margin-top: 5px; color: var(--muted-strong); font-size: 0.72rem; line-height: 1.55; white-space: pre-wrap; }
+.chat-form { display: flex; gap: 8px; margin-top: 12px; }
+.chat-form input {
+  flex: 1;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 0.72rem;
+  outline: 0;
+}
+.task-list { display: grid; gap: 9px; }
+.task-card { padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
+.task-card__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.task-card__head strong { font-size: 0.78rem; }
+.task-card__head small { color: var(--muted); font-size: 0.58rem; }
+.task-card p { margin-top: 6px; color: var(--muted-strong); font-size: 0.7rem; line-height: 1.55; white-space: pre-wrap; }
+.task-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; color: var(--muted); font-size: 0.6rem; }
+.task-editor { display: grid; gap: 11px; padding: 14px; margin-bottom: 13px; border: 1px dashed var(--line); border-radius: 13px; background: var(--surface-soft); }
+.task-editor__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.grade-box { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.grade-box__row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; gap: 8px; margin: 10px 0 7px; }
+.grade-box__row input {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 0.72rem;
+  outline: 0;
+}
+
+/* ── Rail siswa ───────────────────────────────────────────────────────── */
+.student-rail-card {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 15px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: inherit;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  text-decoration: none;
+}
+.student-rail-card > div { flex: 1; }
+.student-rail-card strong { display: block; font-size: 0.8rem; }
+.student-rail-card small { display: block; margin-top: 3px; color: var(--muted); font-size: 0.64rem; }
+.student-rail-card__icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--violet); background: #f0edff; }
+.student-rail-card--teal .student-rail-card__icon { color: var(--teal); background: #e2f8f3; }
+
+/* ── Tombol bahaya & pencarian kelola ─────────────────────────────────── */
+.button--danger { color: #c94f46 !important; }
+.button--danger:hover { border-color: #f0c6c2 !important; background: #fff1ef !important; }
+.kelola-search {
+  width: min(340px, 100%);
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 0.72rem;
+  outline: 0;
+}
+
+/* ── Tema gelap untuk halaman baru ────────────────────────────────────── */
+:root[data-theme='dark'] .collab-edit-link span { background: var(--surface); }
+:root[data-theme='dark'] .builder-extra-card--violet,
+:root[data-theme='dark'] .builder-extra-card--teal,
+:root[data-theme='dark'] .join-room-card { background: var(--surface); }
+:root[data-theme='dark'] .builder-extra-card__icon { background: var(--surface-soft); }
+:root[data-theme='dark'] .group-card__icon,
+:root[data-theme='dark'] .student-rail-card__icon { background: var(--surface-soft); }
+:root[data-theme='dark'] .grade-banner { border-color: #244a44; color: #9fe6d3; background: #16302c; }
+:root[data-theme='dark'] .member-chip,
+:root[data-theme='dark'] .task-card,
+:root[data-theme='dark'] .chat-bubble { background: var(--surface-soft); }
+:root[data-theme='dark'] .room-code { color: var(--text); background: var(--surface); }
+:root[data-theme='dark'] .button--danger { color: #f0b1ae !important; }
+:root[data-theme='dark'] .button--danger:hover { border-color: #59323a !important; background: #3a2327 !important; }
+
+@media (max-width: 900px) {
+  .group-room__grid { grid-template-columns: 1fr; }
+  .collab-link-row { grid-template-columns: 1fr 34px; }
+  .collab-link-row input:first-child { grid-column: 1 / -1; }
+  .grade-box__row { grid-template-columns: 1fr; }
+}
