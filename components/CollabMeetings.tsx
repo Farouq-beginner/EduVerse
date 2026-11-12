@@ -140,8 +140,8 @@ export function CollabMeetingModal({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card collab-modal" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-backdrop">
+      <div className="modal-card collab-modal">
         <div className="modal-card__head">
           <div>
             <div className="eyebrow">KOLABORASI PERTEMUAN</div>

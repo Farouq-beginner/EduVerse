@@ -26,7 +26,7 @@ import {
   saveCollaboration,
   type CollaborationRow,
 } from "@/lib/actions/collaboration";
-import { getCollabProvider } from "@/lib/collab";
+import { collabLinkBadge } from "@/lib/collab";
 
 type LinkDraft = { id?: string; label: string; url: string };
 type Draft = { id?: string; title: string; description: string; links: LinkDraft[] };
@@ -34,7 +34,7 @@ type Draft = { id?: string; title: string; description: string; links: LinkDraft
 const emptyDraft: Draft = { title: "", description: "", links: [{ label: "", url: "" }] };
 
 function providerLabel(provider: string) {
-  return getCollabProvider(provider)?.label ?? "Link";
+  return collabLinkBadge(provider);
 }
 
 export default function TeacherCollaborationPage() {
@@ -186,8 +186,7 @@ export default function TeacherCollaborationPage() {
           </span>
           <strong>Belum ada kolaborasi</strong>
           <p>
-            Tambahkan kolaborasi pertama, misalnya “Kolaborasi PhET” dengan tiga link simulasi garis
-            bilangan.
+            Tambahkan kolaborasi pertama, misalnya “Kolaborasi kelas” dengan beberapa link latihan.
           </p>
           <button className="button button--primary button--small" onClick={openCreate}>
             <Plus size={15} /> Tambah kolaborasi
@@ -238,8 +237,8 @@ export default function TeacherCollaborationPage() {
       )}
 
       {draft && (
-        <div className="modal-backdrop" onClick={() => setDraft(null)}>
-          <div className="modal-card collab-editor" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-backdrop">
+          <div className="modal-card collab-editor">
             <div className="modal-card__head">
               <div>
                 <div className="eyebrow">KOLABORASI KELAS</div>
@@ -258,7 +257,7 @@ export default function TeacherCollaborationPage() {
                   autoFocus
                   value={draft.title}
                   onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                  placeholder="Contoh: Kolaborasi PhET"
+                  placeholder="Contoh: Kolaborasi kelas"
                 />
               </div>
               <div className="field field--full">
@@ -293,7 +292,7 @@ export default function TeacherCollaborationPage() {
                   <input
                     value={link.url}
                     onChange={(event) => patchLink(index, { url: event.target.value })}
-                    placeholder="https://phet.colorado.edu/..."
+                    placeholder="https://contoh.com/link-kolaborasi"
                     inputMode="url"
                   />
                   <button

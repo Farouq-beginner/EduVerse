@@ -10,7 +10,7 @@ import {
   getStudentCollaborations,
   type CollaborationRow,
 } from "@/lib/actions/collaboration";
-import { getCollabProvider } from "@/lib/collab";
+import { collabLinkBadge } from "@/lib/collab";
 
 const tone = ["violet", "teal", "yellow", "coral"] as const;
 
@@ -89,27 +89,24 @@ export default function StudentCollaborationPage() {
                   <StatusPill tone="violet">{row.links.length} link</StatusPill>
                 </div>
                 <div className="collab-student-card__links">
-                  {row.links.map((link) => {
-                    const provider = getCollabProvider(link.provider);
-                    return (
-                      <a
-                        key={link.id}
-                        href={link.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="collab-student-link"
-                      >
-                        <span className="collab-student-link__icon">
-                          <ExternalLink size={14} />
-                        </span>
-                        <span className="collab-student-link__copy">
-                          <strong>{link.label}</strong>
-                          <small>{provider?.label ?? "Buka link"}</small>
-                        </span>
-                        <ExternalLink size={13} />
-                      </a>
-                    );
-                  })}
+                  {row.links.map((link) => (
+                    <a
+                      key={link.id}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="collab-student-link"
+                    >
+                      <span className="collab-student-link__icon">
+                        <ExternalLink size={14} />
+                      </span>
+                      <span className="collab-student-link__copy">
+                        <strong>{link.label}</strong>
+                        <small>{collabLinkBadge(link.provider)}</small>
+                      </span>
+                      <ExternalLink size={13} />
+                    </a>
+                  ))}
                 </div>
               </article>
             ))}

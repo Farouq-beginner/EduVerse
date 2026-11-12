@@ -74,6 +74,16 @@ export function getCollabProvider(id: string): CollabProvider | null {
   return COLLAB_PROVIDERS.find((provider) => provider.id === id) ?? null;
 }
 
+/**
+ * Badge kecil pada link kolaborasi. Judul ini tidak bisa diubah guru: link
+ * biasa tampil "LINK", sedangkan provider yang dikenali tampil namanya
+ * (mis. "PHET"). Yang bisa diganti guru hanya rincian label link-nya.
+ */
+export function collabLinkBadge(providerId: string): string {
+  const provider = getCollabProvider(providerId);
+  return provider ? provider.label.toUpperCase() : "LINK";
+}
+
 /** Tambahkan skema https bila guru menempel link tanpa protokol. */
 export function normalizeCollabUrl(raw: string): string {
   const value = raw.trim();
