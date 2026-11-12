@@ -14,6 +14,7 @@ import {
   FileText,
   Gamepad2,
   Loader2,
+  Lock,
   LockKeyhole,
   LogIn,
   MessageCircle,
@@ -39,7 +40,7 @@ import {
 import { getCourseStructure, getMyCourseProgress, getSessionProfile, type DbCourse } from "@/lib/actions/dashboards";
 import { joinCourseByToken, validateJoinToken } from "@/lib/actions/enrollment";
 import { markBlockComplete, syncBlockCompletions } from "@/lib/actions/progress";
-import { toModule } from "@/lib/course";
+import { isBlockLocked, toModule } from "@/lib/course";
 import { getCourseRevisionBySlug } from "@/lib/actions/sync";
 import { loadWithCache, sharedPing } from "@/lib/client-cache";
 
@@ -634,6 +635,7 @@ function ModuleCard({ module, index, completed, courseSlug }: { module: Module; 
             key={lesson.id}
             lesson={lesson}
             isDone={completed.includes(lesson.id)}
+            isLocked={isBlockLocked(lesson, completed)}
             href={`/learn/${courseSlug}/modul/${module.id}?lesson=${lesson.id}`}
           />
         ))}
@@ -666,7 +668,17 @@ function ModuleCard({ module, index, completed, courseSlug }: { module: Module; 
   );
 }
 
-function LessonButton({ lesson, isDone, href }: { lesson: LessonBlock; isDone: boolean; href: string }) {
+function LessonButton({
+  lesson,
+  isDone,
+  isLocked,
+  href,
+}: {
+  lesson: LessonBlock;
+  isDone: boolean;
+  isLocked: boolean;
+  href: string;
+}) {
   const Icon = lesson.type === "video" ? Video : lesson.type === "quiz" ? ClipboardCheck : lesson.type === "game" ? Gamepad2 : lesson.type === "reflection" ? Sparkles : BookOpen;
   return (
     <Link href={href} className="lesson-item">
@@ -674,8 +686,10 @@ function LessonButton({ lesson, isDone, href }: { lesson: LessonBlock; isDone: b
         <Icon size={14} />
       </span>
       <strong>{lesson.title}</strong>
-      <small>{lesson.duration}</small>
-      <span className={`lesson-item__status ${lesson.status === "new" ? "is-new" : ""}`}>{isDone ? <Check size={14} /> : <ChevronRight size={15} />}</span>
+      <small>{isLocked ? "Terkunci" : lesson.duration}</small>
+      <span className={`lesson-item__status ${lesson.status === "new" ? "is-new" : ""}`}>
+        {isLocked ? <Lock size={14} /> : isDone ? <Check size={14} /> : <ChevronRight size={15} />}
+      </span>
     </Link>
   );
 }

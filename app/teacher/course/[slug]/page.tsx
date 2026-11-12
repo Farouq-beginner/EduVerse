@@ -846,6 +846,15 @@ export default function CourseBuilderPage() {
                         {isEditing && (
                           <BlockEditor
                             block={item}
+                            lockCandidates={modules
+                              .flatMap((candidateModule) =>
+                                candidateModule.lessons.map((lesson) => ({
+                                  id: lesson.id,
+                                  title: lesson.title,
+                                  moduleTitle: candidateModule.title,
+                                }))
+                              )
+                              .filter((candidate) => candidate.id !== item.id)}
                             uploading={uploadingBlockId === item.id}
                             onPatch={(patch) => patchBlock(item.id, patch)}
                             onMaterial={(patch) => patchMaterial(item.id, patch)}
@@ -1076,6 +1085,7 @@ export default function CourseBuilderPage() {
 /** Editor materi inline — semua ketikan langsung masuk draft, tanpa tombol simpan/batal. */
 function BlockEditor({
   block,
+  lockCandidates,
   uploading,
   onPatch,
   onMaterial,
@@ -1085,6 +1095,7 @@ function BlockEditor({
   onClose,
 }: {
   block: LessonBlock;
+  lockCandidates: Array<{ id: string; title: string; moduleTitle: string }>;
   uploading: boolean;
   onPatch: (patch: Partial<LessonBlock>) => void;
   onMaterial: (patch: Record<string, unknown>) => void;
@@ -1095,6 +1106,7 @@ function BlockEditor({
 }) {
   const material = block.material ?? {};
   const worksheet: WorksheetConfig = { ...blankWorksheet, ...(material.worksheet ?? {}) };
+  const lock = material.lock ?? { enabled: false, requires: [] };
 
   return (
     <div className="activity-lesson-card" style={{ marginTop: 10, padding: 16, background: "var(--surface-2)", borderRadius: 14 }}>
@@ -1220,6 +1232,55 @@ function BlockEditor({
                 <small>Klik ikon pensil pada materi kuis untuk mengatur soal, kunci, dan aturan skor.</small>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Kunci materi: pilih materi yang wajib selesai lebih dulu. */}
+        <div className="field field--full">
+          <div className="settings-row">
+            <div className="settings-row__copy">
+              <strong>Kunci materi</strong>
+              <small>Siswa membuka materi ini setelah menyelesaikan materi yang dipilih.</small>
+            </div>
+            <button
+              type="button"
+              className={`toggle ${lock.enabled ? "is-on" : ""}`}
+              onClick={() => onMaterial({ lock: { enabled: !lock.enabled, requires: lock.requires } })}
+              aria-label="Ubah kunci materi"
+            >
+              <span />
+            </button>
+          </div>
+        </div>
+        {lock.enabled && (
+          <div className="field field--full">
+            <label>Materi yang harus selesai dulu</label>
+            <div className="lock-candidates">
+              {lockCandidates.map((candidate) => (
+                <label className="lock-candidate" key={candidate.id}>
+                  <input
+                    type="checkbox"
+                    checked={lock.requires.includes(candidate.id)}
+                    onChange={(event) => {
+                      const requires = event.target.checked
+                        ? [...lock.requires, candidate.id]
+                        : lock.requires.filter((id) => id !== candidate.id);
+                      onMaterial({ lock: { enabled: true, requires } });
+                    }}
+                  />
+                  <span>
+                    {candidate.title}
+                    <small>{candidate.moduleTitle}</small>
+                  </span>
+                </label>
+              ))}
+              {lockCandidates.length === 0 && <small className="field-helper">Belum ada materi lain di pembelajaran ini.</small>}
+            </div>
+            <small className="field-helper">
+              {lock.requires.length === 0
+                ? "Pilih minimal satu materi agar kunci berfungsi."
+                : "Kunci terbuka otomatis setelah semua materi pilihan selesai dikerjakan siswa."}
+            </small>
           </div>
         )}
 

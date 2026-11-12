@@ -27,6 +27,8 @@ export type LessonBlock = {
     game?: GameBlockConfig;
     /// Lembar kerja, jawaban & lampiran yang sama untuk semua tipe materi.
     worksheet?: WorksheetConfig;
+    /// Kunci materi: siswa harus menyelesaikan semua materi di `requires` dulu.
+    lock?: { enabled: boolean; requires: string[] };
   };
 };
 

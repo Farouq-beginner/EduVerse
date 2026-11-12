@@ -49,6 +49,18 @@ export function toCourse(course: DbCourse): Course {
   };
 }
 
+/**
+ * Materi terkunci bila opsi kunci aktif dan masih ada prasyarat yang belum
+ * selesai. Begitu semua prasyarat selesai, kunci terbuka otomatis.
+ */
+export function isBlockLocked(block: LessonBlock, completed: string[]): boolean {
+  const lock = block.material?.lock;
+  if (!lock?.enabled) return false;
+  const requires = Array.isArray(lock.requires) ? lock.requires.filter(Boolean) : [];
+  if (requires.length === 0) return false;
+  return requires.some((id) => !completed.includes(id));
+}
+
 /** Petakan pertemuan UI ke payload server (menormalkan id & urutan). */
 export function toSavePayload(
   modules: Module[],

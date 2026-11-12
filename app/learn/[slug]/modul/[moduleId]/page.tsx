@@ -14,6 +14,7 @@ import {
   Gamepad2,
   Link2,
   Loader2,
+  Lock,
   Sparkles,
   Video,
 } from "lucide-react";
@@ -34,7 +35,7 @@ import {
 } from "@/lib/storage";
 import { getCourseStructure, getMyCourseProgress, getQuizForBlock, getSessionProfile, type DbCourse } from "@/lib/actions/dashboards";
 import { markBlockComplete, submitQuizAttempt, syncBlockCompletions } from "@/lib/actions/progress";
-import { toModule } from "@/lib/course";
+import { isBlockLocked, toModule } from "@/lib/course";
 import { getCourseRevisionBySlug } from "@/lib/actions/sync";
 import { loadWithCache, sharedPing } from "@/lib/client-cache";
 import { fileKindLabel } from "@/lib/upload";
@@ -154,6 +155,7 @@ export default function ModulePage() {
   }, [module, dbCourse]);
 
   const selected = blocks.find((block) => block.id === selectedId) ?? blocks[0];
+  const selectedLocked = selected ? isBlockLocked(selected, completed) : false;
 
   useEffect(() => {
     if (!selected) return;
@@ -292,20 +294,23 @@ export default function ModulePage() {
         <div className="module-page__grid">
           <aside className="module-outline">
             <div className="eyebrow">ISI PERTEMUAN</div>
-            {blocks.map((block, index) => (
-              <button
-                key={block.id}
-                className={`module-outline__item ${selected?.id === block.id ? "is-active" : ""}`}
-                onClick={() => setSelectedId(block.id)}
-              >
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <div>
-                  <strong>{block.title}</strong>
-                  <small>{block.duration}</small>
-                </div>
-                {completed.includes(block.id) && <Check size={14} />}
-              </button>
-            ))}
+            {blocks.map((block, index) => {
+              const locked = isBlockLocked(block, completed);
+              return (
+                <button
+                  key={block.id}
+                  className={`module-outline__item ${selected?.id === block.id ? "is-active" : ""}${locked ? " is-locked" : ""}`}
+                  onClick={() => setSelectedId(block.id)}
+                >
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <strong>{block.title}</strong>
+                    <small>{locked ? "Terkunci" : block.duration}</small>
+                  </div>
+                  {locked ? <Lock size={14} /> : completed.includes(block.id) && <Check size={14} />}
+                </button>
+              );
+            })}
             {blocks.length === 0 && <p className="section-subtitle">Guru belum mengisi materi pertemuan ini.</p>}
             <Link href={`/learn/${courseSlug}/games`} className="module-games-link">
               <Gamepad2 size={16} />
@@ -319,18 +324,27 @@ export default function ModulePage() {
 
           <main className="module-viewer">
             {selected ? (
-              <LessonRenderer
-                key={selected.id}
-                block={selected}
-                dbQuiz={dbQuiz}
-                courseId={courseId}
-                enrolled={enrolled}
-                account={account}
-                identity={identity}
-                courseSlug={courseSlug}
-                onComplete={() => completeBlock(selected)}
-                onToast={setToast}
-              />
+              selectedLocked ? (
+                <LockedLesson
+                  block={selected}
+                  blocks={blocks}
+                  completed={completed}
+                  onOpen={(id) => setSelectedId(id)}
+                />
+              ) : (
+                <LessonRenderer
+                  key={selected.id}
+                  block={selected}
+                  dbQuiz={dbQuiz}
+                  courseId={courseId}
+                  enrolled={enrolled}
+                  account={account}
+                  identity={identity}
+                  courseSlug={courseSlug}
+                  onComplete={() => completeBlock(selected)}
+                  onToast={setToast}
+                />
+              )
             ) : (
               <div className="empty-state-card">
                 <FileText size={24} />
@@ -406,14 +420,13 @@ function LessonRenderer({
             <div>
               <div className="eyebrow">MATERI SISWA · {block.duration}</div>
               <h2>{block.title}</h2>
-              {/* Isi materi menggantikan deskripsi singkat agar tidak ada dua instruksi bertumpuk. */}
-              {material.text ? (
-                <div className="rich-material" style={{ marginBottom: 16 }}>
-                  {material.text}
+              {material.text && (
+                <div className="link-lesson-card__instruction">
+                  <div className="eyebrow">INSTRUKSI</div>
+                  <div className="rich-material">{material.text}</div>
                 </div>
-              ) : (
-                block.description && <p>{block.description}</p>
               )}
+              {block.description && <p>{block.description}</p>}
               {material.linkTitle && <h3 className="link-lesson-card__title">{material.linkTitle}</h3>}
               {material.linkUrl ? (
                 <a href={material.linkUrl} target="_blank" rel="noreferrer" className="button button--primary">
@@ -518,6 +531,53 @@ function LessonRenderer({
       />
 
       {worksheet?.enabled === false && <CompleteButton onClick={onComplete} label="Materi selesai" />}
+    </div>
+  );
+}
+
+/** Panel yang menggantikan isi materi selama prasyaratnya belum selesai. */
+function LockedLesson({
+  block,
+  blocks,
+  completed,
+  onOpen,
+}: {
+  block: LessonBlock;
+  blocks: LessonBlock[];
+  completed: string[];
+  onOpen: (id: string) => void;
+}) {
+  const requires = block.material?.lock?.requires ?? [];
+
+  return (
+    <div className="locked-lesson">
+      <span className="locked-lesson__icon">
+        <Lock size={22} />
+      </span>
+      <div className="eyebrow">MATERI TERKUNCI</div>
+      <h2>{block.title}</h2>
+      <p>Selesaikan materi berikut dulu. Kunci terbuka otomatis setelah jawaban atau lembar kerjanya dikirim.</p>
+      <div className="locked-lesson__list">
+        {requires.map((id) => {
+          const required = blocks.find((item) => item.id === id);
+          const done = completed.includes(id);
+          return (
+            <button
+              key={id}
+              type="button"
+              className={`locked-lesson__item ${done ? "is-done" : ""}`}
+              onClick={() => onOpen(id)}
+            >
+              <span>{done ? <Check size={15} /> : <Lock size={15} />}</span>
+              <div>
+                <strong>{required?.title ?? "Materi prasyarat"}</strong>
+                <small>{done ? "Selesai dikerjakan" : "Belum selesai"}</small>
+              </div>
+              <ArrowRight size={14} />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
