@@ -61,12 +61,21 @@ export function saveProgress(progress: number, activityDelta = 0) {
   syncParticipantProgress(value, activityDelta);
 }
 
-export function getCompleted(): string[] {
-  return read<string[]>(keys.completed, []);
+/**
+ * Progres diselesaikan per siswa. `scope` = id akun siswa, sehingga dua siswa
+ * di perangkat yang sama tidak saling mewarisi progres. Tamu memakai kunci
+ * tanpa scope (progres perangkat).
+ */
+function completedKey(scope?: string) {
+  return scope ? `${keys.completed}:${scope}` : keys.completed;
 }
 
-export function saveCompleted(completed: string[]) {
-  write(keys.completed, completed);
+export function getCompleted(scope?: string): string[] {
+  return read<string[]>(completedKey(scope), []);
+}
+
+export function saveCompleted(completed: string[], scope?: string) {
+  write(completedKey(scope), completed);
 }
 
 /** Sinkronkan progres perangkat ini ke daftar peserta yang dibaca workspace guru. */

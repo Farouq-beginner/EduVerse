@@ -73,19 +73,15 @@ export default function ModulePage() {
     let active = true;
     (async () => {
       try {
-        const [structure, mine, profile] = await Promise.all([
+        const [structure, profile] = await Promise.all([
           loadWithCache(
             `structure:${courseSlug}`,
             () => getCourseStructure(courseSlug),
             () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
           ),
-          loadWithCache(
-            `progress:${courseSlug}`,
-            () => getMyCourseProgress(courseSlug),
-            () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
-          ),
           getSessionProfile(),
         ]);
+        const mine = await getMyCourseProgress(courseSlug);
         if (!active) return;
 
         if (structure) {
@@ -102,13 +98,24 @@ export default function ModulePage() {
           setIdentity(getIdentity());
         }
 
+        // Progres per perangkat tidak boleh bercampur antar siswa: hanya tamu,
+        // atau siswa dengan nama tamu yang sama di perangkat ini, yang dibaca.
+        const progressScope = profile && profile.role === "STUDENT" ? profile.id : undefined;
+        const guestIdentity = getIdentity();
+        const guestMatchesMe =
+          Boolean(profile) &&
+          Boolean(guestIdentity) &&
+          guestIdentity!.name.trim().toLowerCase() === profile!.fullName.trim().toLowerCase();
+        const localCompleted = progressScope
+          ? Array.from(new Set([...getCompleted(progressScope), ...(guestMatchesMe ? getCompleted() : [])]))
+          : getCompleted();
+
         if (mine) {
           setCourseId(mine.courseId);
           setEnrolled(mine.enrolled);
-          const localCompleted = getCompleted();
           const merged = Array.from(new Set([...mine.completedBlockIds, ...localCompleted]));
           setCompleted(merged);
-          saveCompleted(merged);
+          saveCompleted(merged, progressScope);
 
           const pending = localCompleted.filter((id) => !mine.completedBlockIds.includes(id));
           if (mine.enrolled && pending.length > 0) {
@@ -121,7 +128,7 @@ export default function ModulePage() {
           }
         } else {
           // Mode lokal (belum login): progres tetap dibaca dari perangkat.
-          setCompleted(getCompleted());
+          setCompleted(localCompleted);
         }
       } catch {
         setModules(getCourseModules());
@@ -163,7 +170,7 @@ export default function ModulePage() {
   async function completeBlock(block: LessonBlock, label = "Materi") {
     const nextCompleted = completed.includes(block.id) ? completed : [...completed, block.id];
     setCompleted(nextCompleted);
-    saveCompleted(nextCompleted);
+    saveCompleted(nextCompleted, account?.id);
     const total = modules.reduce((sum, item) => sum + item.lessons.length, 0);
     saveProgress(total > 0 ? Math.round((nextCompleted.length / total) * 100) : 0);
 
@@ -392,14 +399,14 @@ function LessonRenderer({
 
       {block.type === "link" && (
         <div className="lesson-view">
-          <LessonHeading icon={<Link2 size={18} />} block={block} />
           <div className="link-lesson-card">
             <span className="link-lesson-card__icon">
               <Link2 size={22} />
             </span>
             <div>
+              <div className="eyebrow">MATERI SISWA · {block.duration}</div>
               <h2>{block.title}</h2>
-              <p>{block.description || "Link sumber belajar dari guru."}</p>
+              {block.description && <p>{block.description}</p>}
               {material.linkUrl ? (
                 <a href={material.linkUrl} target="_blank" rel="noreferrer" className="button button--primary">
                   <ExternalLink size={16} /> Buka link
@@ -446,7 +453,6 @@ function LessonRenderer({
           <div className="game-lesson-card">
             <div className="game-lesson-card__art">{material.game?.gameId === "charge-cards" ? "±" : material.game?.gameId === "number-line" ? "↔" : "✦"}</div>
             <div>
-              <h2>{block.title}</h2>
               <p>{material.game?.instructions || block.description}</p>
               <Link href={`/learn/${courseSlug}/games`} className="button button--primary">
                 <Gamepad2 size={16} /> Buka game ini

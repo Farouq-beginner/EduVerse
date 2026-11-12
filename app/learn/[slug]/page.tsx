@@ -90,14 +90,8 @@ export default function StudentLearningPage() {
         setDbCourse(structure);
         setModules(structure.modules.map(toModule));
 
-        const [mine, profile] = await Promise.all([
-          loadWithCache(
-            `progress:${courseSlug}`,
-            () => getMyCourseProgress(courseSlug),
-            () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
-          ),
-          getSessionProfile(),
-        ]);
+        const profile = await getSessionProfile();
+        const mine = await getMyCourseProgress(courseSlug);
         if (!active) return;
 
         if (profile && profile.role === "STUDENT") {
@@ -109,10 +103,21 @@ export default function StudentLearningPage() {
         }
         setLocalIdentity(getIdentity());
 
+        // Progres per perangkat hanya dipakai tamu, atau siswa yang memang
+        // memakai perangkat ini sebagai tamu dengan nama yang sama.
+        const progressScope = profile && profile.role === "STUDENT" ? profile.id : undefined;
+        const guestIdentity = getIdentity();
+        const guestMatchesMe =
+          Boolean(profile) &&
+          Boolean(guestIdentity) &&
+          guestIdentity!.name.trim().toLowerCase() === profile!.fullName.trim().toLowerCase();
+        const localCompleted = progressScope
+          ? Array.from(new Set([...getCompleted(progressScope), ...(guestMatchesMe ? getCompleted() : [])]))
+          : getCompleted();
+
         if (mine) {
           setDbCourseId(mine.courseId);
           setEnrolled(mine.enrolled);
-          const localCompleted = getCompleted();
           const merged = Array.from(new Set([...mine.completedBlockIds, ...localCompleted]));
           setCompleted(merged);
 
@@ -126,12 +131,12 @@ export default function StudentLearningPage() {
               if (result.ok) setToast(`${result.saved} progres perangkat tersinkron ke database.`);
             }
           }
-          saveCompleted(merged);
+          saveCompleted(merged, progressScope);
           if (totalBlocks > 0) {
             saveProgress(Math.round((merged.length / totalBlocks) * 100));
           }
         } else {
-          setCompleted(getCompleted());
+          setCompleted(localCompleted);
           saveProgress(getProgress());
         }
       } catch {
@@ -228,7 +233,7 @@ export default function StudentLearningPage() {
     async (id: string, label: string) => {
       const nextCompleted = completed.includes(id) ? completed : [...completed, id];
       setCompleted(nextCompleted);
-      saveCompleted(nextCompleted);
+      saveCompleted(nextCompleted, account?.id);
       const nextProgress = Math.min(100, Math.round((nextCompleted.length / Math.max(1, totalBlocks)) * 100));
       saveProgress(nextProgress);
 

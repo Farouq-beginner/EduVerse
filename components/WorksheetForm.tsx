@@ -153,8 +153,7 @@ export function WorksheetForm({
   return (
     <div className="activity-lesson-card answer-panel" style={{ marginTop: 18 }}>
       <div className="eyebrow">LEMBAR KERJA · JAWABAN &amp; LAMPIRAN</div>
-      {config.prompt && <p style={{ marginTop: 8, color: "var(--muted)", fontSize: ".86rem" }}>{config.prompt}</p>}
-
+      {config.prompt && <p className="worksheet-prompt">{config.prompt}</p>}
       <div className="form-grid" style={{ marginTop: 12 }}>
         <div className="field field--full">
           <label>{config.answerLabel || blankWorksheet.answerLabel}</label>
