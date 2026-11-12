@@ -420,13 +420,13 @@ function LessonRenderer({
             <div>
               <div className="eyebrow">MATERI SISWA · {block.duration}</div>
               <h2>{block.title}</h2>
+              {block.description && <p>{block.description}</p>}
               {material.text && (
                 <div className="link-lesson-card__instruction">
                   <div className="eyebrow">INSTRUKSI</div>
                   <div className="rich-material">{material.text}</div>
                 </div>
               )}
-              {block.description && <p>{block.description}</p>}
               {material.linkTitle && <h3 className="link-lesson-card__title">{material.linkTitle}</h3>}
               {material.linkUrl ? (
                 <a href={material.linkUrl} target="_blank" rel="noreferrer" className="button button--primary">
