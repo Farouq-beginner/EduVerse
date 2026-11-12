@@ -151,7 +151,7 @@ export function WorksheetForm({
   const isImage = file?.fileType.startsWith("image/");
 
   return (
-    <div className="activity-lesson-card answer-panel" style={{ marginTop: 18 }}>
+    <div className="activity-lesson-card answer-panel" style={{ marginTop: 26 }}>
       <div className="eyebrow">LEMBAR KERJA · JAWABAN &amp; LAMPIRAN</div>
       {config.prompt && <p className="worksheet-prompt">{config.prompt}</p>}
       <div className="form-grid" style={{ marginTop: 12 }}>

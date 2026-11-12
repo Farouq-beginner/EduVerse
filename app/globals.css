@@ -2247,7 +2247,10 @@ h3 { font-size: 1.05rem; line-height: 1.25; }
 
 /* Lembar kerja & instruksi kelompok di tampilan siswa */
 .worksheet-prompt {
-  margin-top: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-soft);
   color: var(--muted-strong);
   font-size: 1.02rem;
   line-height: 1.75;
@@ -2292,3 +2295,10 @@ h3 { font-size: 1.05rem; line-height: 1.25; }
 .locked-lesson__item small { margin-top: 2px; color: var(--muted); font-size: 0.68rem; }
 .locked-lesson__item.is-done > span { color: var(--teal); }
 .locked-lesson__item > svg { color: var(--muted); }
+
+/* Jarak isi materi/instruksi ke berkas materi & lembar kerja agar tidak dempet */
+.rich-material { margin-bottom: 20px; }
+.pdf-viewer { margin-top: 20px; }
+.attachment-preview { margin-top: 20px; }
+.lesson-view + .pdf-viewer,
+.lesson-view + .attachment-preview { margin-top: 22px; }
