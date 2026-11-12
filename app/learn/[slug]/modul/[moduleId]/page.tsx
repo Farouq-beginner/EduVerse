@@ -406,7 +406,15 @@ function LessonRenderer({
             <div>
               <div className="eyebrow">MATERI SISWA · {block.duration}</div>
               <h2>{block.title}</h2>
-              {block.description && <p>{block.description}</p>}
+              {/* Isi materi menggantikan deskripsi singkat agar tidak ada dua instruksi bertumpuk. */}
+              {material.text ? (
+                <div className="rich-material" style={{ marginBottom: 16 }}>
+                  {material.text}
+                </div>
+              ) : (
+                block.description && <p>{block.description}</p>
+              )}
+              {material.linkTitle && <h3 className="link-lesson-card__title">{material.linkTitle}</h3>}
               {material.linkUrl ? (
                 <a href={material.linkUrl} target="_blank" rel="noreferrer" className="button button--primary">
                   <ExternalLink size={16} /> Buka link

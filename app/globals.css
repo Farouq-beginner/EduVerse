@@ -2260,3 +2260,6 @@ h3 { font-size: 1.05rem; line-height: 1.25; }
 .link-lesson-card > div { flex: 1; min-width: 0; }
 .link-lesson-card h2 { margin: 0 0 6px; font-size: 1.2rem; }
 .lesson-view__heading h2 { font-size: clamp(1.9rem, 3vw, 3rem); }
+
+/* Kartu link: subjudul sumber belajar di bawah isi materi */
+.link-lesson-card__title { margin: 0 0 8px; font-size: 0.98rem; }

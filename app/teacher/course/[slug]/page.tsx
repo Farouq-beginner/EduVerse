@@ -434,7 +434,7 @@ export default function CourseBuilderPage() {
           : type === "game"
             ? { game: { ...blankGame } }
             : type === "link"
-              ? { linkUrl: "" }
+              ? { linkUrl: "", linkTitle: "", text: "" }
               : {},
     };
     const next = modules.map((module) =>
@@ -1150,11 +1150,20 @@ function BlockEditor({
         {block.type === "link" && (
           <>
             <div className="field field--full">
+              <label>Isi materi / instruksi</label>
+              <textarea
+                className="material-textarea"
+                value={material.text ?? ""}
+                onChange={(event) => onMaterial({ text: event.target.value })}
+                placeholder="Tulis materi atau instruksi yang dikerjakan siswa sebelum membuka link..."
+              />
+            </div>
+            <div className="field field--full">
               <label>Judul link</label>
               <input value={material.linkTitle ?? ""} onChange={(event) => onMaterial({ linkTitle: event.target.value })} placeholder="Judul sumber belajar" />
             </div>
             <div className="field field--full">
-              <label>URL / link yang dibuka siswa</label>
+              <label>Masukkan link</label>
               <input value={material.linkUrl ?? ""} onChange={(event) => onMaterial({ linkUrl: event.target.value })} placeholder="https://contoh.com/sumber-belajar" />
             </div>
           </>
