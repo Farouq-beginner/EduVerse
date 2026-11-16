@@ -9,5 +9,17 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="id"><body><Suspense fallback={<div />}><ThemeBoot />{children}</Suspense></body></html>;
+  // suppressHydrationWarning: ekstensi penerjemah (mis. Trancy) dan preferensi
+  // tema menambahkan atribut ke <html>/<body> sebelum React hydrate. Itu bukan
+  // milik aplikasi, jadi jangan dianggap mismatch yang merusak halaman.
+  return (
+    <html lang="id" suppressHydrationWarning>
+      <body suppressHydrationWarning>
+        <Suspense fallback={<div />}>
+          <ThemeBoot />
+          {children}
+        </Suspense>
+      </body>
+    </html>
+  );
 }
