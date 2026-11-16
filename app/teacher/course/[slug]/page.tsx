@@ -853,6 +853,15 @@ export default function CourseBuilderPage() {
                                 title: lesson.title,
                                 moduleTitle: module.title,
                               }))}
+                            lockOtherCandidates={modules
+                              .filter((candidateModule) => candidateModule.id !== module.id)
+                              .flatMap((candidateModule) =>
+                                candidateModule.lessons.map((lesson) => ({
+                                  id: lesson.id,
+                                  title: lesson.title,
+                                  moduleTitle: candidateModule.title,
+                                }))
+                              )}
                             uploading={uploadingBlockId === item.id}
                             onPatch={(patch) => patchBlock(item.id, patch)}
                             onMaterial={(patch) => patchMaterial(item.id, patch)}
@@ -1084,6 +1093,7 @@ export default function CourseBuilderPage() {
 function BlockEditor({
   block,
   lockCandidates,
+  lockOtherCandidates,
   uploading,
   onPatch,
   onMaterial,
@@ -1094,6 +1104,9 @@ function BlockEditor({
 }: {
   block: LessonBlock;
   lockCandidates: Array<{ id: string; title: string; moduleTitle: string }>;
+  /// Materi di pertemuan lain — hanya untuk memberi nama prasyarat lama yang
+  /// tidak lagi ditawarkan, supaya guru tetap bisa menghapusnya.
+  lockOtherCandidates: Array<{ id: string; title: string; moduleTitle: string }>;
   uploading: boolean;
   onPatch: (patch: Partial<LessonBlock>) => void;
   onMaterial: (patch: Record<string, unknown>) => void;
@@ -1111,6 +1124,13 @@ function BlockEditor({
   const outsideRequires = lock.requires.filter(
     (id) => !lockCandidates.some((candidate) => candidate.id === id)
   );
+  const candidateTitles = new Map(
+    [...lockCandidates, ...lockOtherCandidates].map((candidate) => [candidate.id, candidate])
+  );
+  const removeRequires = (idsToRemove: string[]) =>
+    onMaterial({
+      lock: { enabled: true, requires: lock.requires.filter((id) => !idsToRemove.includes(id)) },
+    });
 
   return (
     <div className="activity-lesson-card" style={{ marginTop: 10, padding: 16, background: "var(--surface-2)", borderRadius: 14 }}>
@@ -1301,9 +1321,39 @@ function BlockEditor({
             )}
 
             {outsideRequires.length > 0 && (
-              <p className="lock-picker__note">
-                {outsideRequires.length} prasyarat dari pertemuan lain masih berlaku untuk materi ini.
-              </p>
+              <div className="lock-picker__note">
+                <div className="lock-picker__note-head">
+                  <strong>Prasyarat dari pertemuan lain</strong>
+                  <button
+                    type="button"
+                    className="lock-picker__clear"
+                    onClick={() => removeRequires(outsideRequires)}
+                  >
+                    Hapus semua
+                  </button>
+                </div>
+                <p>Materi ini masih menunggu materi di pertemuan lain. Hapus agar kunci sesuai daftar di atas.</p>
+                <div className="lock-picker__chips">
+                  {outsideRequires.map((id) => {
+                    const info = candidateTitles.get(id);
+                    return (
+                      <button
+                        type="button"
+                        className="lock-require-chip"
+                        key={id}
+                        onClick={() => removeRequires([id])}
+                        title="Hapus prasyarat ini"
+                      >
+                        <span>
+                          {info?.title ?? "Materi pertemuan lain"}
+                          <small>{info?.moduleTitle ?? "Pertemuan lain"}</small>
+                        </span>
+                        <X size={12} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
             <small className="field-helper">
