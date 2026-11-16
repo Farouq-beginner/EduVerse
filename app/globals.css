@@ -2302,3 +2302,232 @@ h3 { font-size: 1.05rem; line-height: 1.25; }
 .attachment-preview { margin-top: 20px; }
 .lesson-view + .pdf-viewer,
 .lesson-view + .attachment-preview { margin-top: 22px; }
+
+/* ── Kunci materi per pertemuan (builder guru) ────────────────────────── */
+.lock-picker {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.lock-picker__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.lock-picker__head label { display: block; margin-bottom: 4px; }
+.lock-picker__head .field-helper { margin-top: 0; }
+.lock-picker__count {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 0.63rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.lock-picker__count.is-on { color: #fff; background: var(--violet); }
+.lock-picker__empty {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 11px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+.lock-picker__note {
+  margin-top: 8px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  color: #8a6a11;
+  background: #fff6dc;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+.lock-picker .lock-candidates {
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 9px;
+  margin-top: 12px;
+}
+.lock-candidate {
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 11px;
+  font-size: 0.74rem;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.lock-candidate span strong { display: block; font-size: 0.75rem; line-height: 1.4; }
+.lock-candidate.is-checked { border-color: var(--violet); background: #f5f2ff; }
+:root[data-theme='dark'] .lock-candidate.is-checked { background: var(--surface-soft); }
+:root[data-theme='dark'] .lock-picker { background: var(--surface-soft); }
+:root[data-theme='dark'] .lock-picker__note { color: #f0d390; background: #3a3220; }
+
+/* ── Kerangka konsol Admin (terpisah dari workspace guru) ─────────────── */
+.admin-shell { display: flex; min-height: 100vh; background: var(--bg); }
+.admin-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  width: 262px;
+  min-height: 100vh;
+  padding: 26px 18px 20px;
+  color: #e7e5f7;
+  background: #262547;
+  border-right: 1px solid #35335c;
+}
+.admin-sidebar__brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 8px;
+}
+.admin-sidebar__brand .brand-mark,
+.admin-sidebar__brand .brand-mark strong { color: #fff; }
+.admin-tag {
+  padding: 4px 7px;
+  border-radius: 6px;
+  color: #cfc6ff;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.admin-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 26px 0 24px;
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.admin-identity__avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 11px;
+  color: #fff;
+  background: var(--violet);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+.admin-identity > div { flex: 1; min-width: 0; }
+.admin-identity strong, .admin-identity small { display: block; }
+.admin-identity strong { font-size: 0.76rem; }
+.admin-identity small { margin-top: 2px; color: #b3b0d6; font-size: 0.62rem; }
+.admin-identity > svg { color: #9f97e8; }
+.admin-sidebar__label {
+  margin: 0 10px 10px;
+  color: #918dbe;
+  font-size: 0.59rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+.admin-nav { display: grid; gap: 4px; }
+.admin-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 11px;
+  color: #c9c6e6;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.79rem;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.admin-nav__link:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.admin-nav__link.is-active { color: #fff; background: var(--violet); font-weight: 800; }
+.admin-nav__link--button { width: 100%; }
+.admin-sidebar__bottom {
+  display: grid;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.admin-canvas {
+  flex: 1;
+  min-width: 0;
+  padding: 32px 34px 64px;
+}
+.admin-page {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+.admin-page .page-topbar { margin-bottom: 0; }
+.admin-page .metrics-grid { margin: 0; }
+.admin-page .admin-grid { margin-top: 0; }
+.admin-session {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted-strong);
+  background: var(--surface);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+@media (max-width: 900px) {
+  .admin-shell { display: block; }
+  .admin-sidebar {
+    position: relative;
+    width: 100%;
+    min-height: auto;
+    padding: 16px 15px;
+    border-right: 0;
+    border-bottom: 1px solid #35335c;
+  }
+  .admin-identity, .admin-sidebar__label, .admin-sidebar__bottom { display: none; }
+  .admin-nav { display: flex; gap: 6px; margin-top: 14px; overflow-x: auto; }
+  .admin-nav__link { flex: 0 0 auto; padding: 0 12px; }
+  .admin-canvas { padding: 20px 16px 48px; }
+}
+
+/* ── Padding halaman Kolaborasi & Kerja Kelompok ──────────────────────── */
+.collab-page { gap: 16px; }
+.collab-edit-card, .collab-student-card { padding: 22px 24px 24px; }
+.collab-edit-card__head, .collab-student-card__head { padding-left: 6px; padding-right: 4px; }
+.collab-student-card__links { padding-left: 6px; padding-right: 4px; }
+.collab-edit-card__links, .collab-student-card__links { margin-top: 16px; }
+.collab-edit-link, .collab-student-link { padding: 12px 14px; }
+.collab-edit-card__actions { margin-top: 18px; }
+.collab-link-editor { padding-top: 18px; }
+.collab-editor .modal-card__head { margin-bottom: 4px; }
+.collab-modal { padding: 26px; }
+.builder-extra-card { padding: 20px 22px; }
+.builder-extras { padding-bottom: 6px; }
+.student-wrap .collab-page,
+.student-wrap .group-grid { margin-top: 18px; }
+.group-grid { gap: 16px; }
+.group-card { padding: 20px 22px; }
+.group-card__head { gap: 12px; }
+.group-card__actions { padding-top: 4px; }
+.group-room { gap: 18px; margin-top: 20px; }
+.group-room .panel { padding: 22px 24px; }
+.group-room__head { padding: 26px 28px; }
+.group-room .section-title { margin-bottom: 14px; }
+.group-room .grade-box { margin-top: 22px; padding-top: 18px; }
+@media (max-width: 720px) {
+  .collab-edit-card, .collab-student-card { padding: 18px 16px 20px; }
+  .collab-edit-card__head, .collab-student-card__head,
+  .collab-student-card__links { padding-left: 0; padding-right: 0; }
+  .group-card { padding: 16px; }
+  .group-room .panel { padding: 16px; }
+  .group-room__head { padding: 18px; }
+  .collab-modal { padding: 20px; }
+  .lock-picker .lock-candidates { grid-template-columns: 1fr; }
+}

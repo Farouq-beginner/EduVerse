@@ -88,18 +88,25 @@ export async function getStudentCollaborations(
   slug: string
 ): Promise<{ courseTitle: string; courseId: string; rows: CollaborationRow[] }> {
   try {
+    // Satu query: course beserta kolaborasinya, bukan dua round-trip berurutan.
     const course = await prisma.course.findUnique({
       where: { slug },
-      select: { id: true, title: true, state: true },
+      select: {
+        id: true,
+        title: true,
+        collaborations: {
+          orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+          include: { links: true },
+        },
+      },
     });
     if (!course) return { courseTitle: "", courseId: "", rows: [] };
 
-    const rows = await prisma.collaboration.findMany({
-      where: { courseId: course.id },
-      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-      include: { links: true },
-    });
-    return { courseTitle: course.title, courseId: course.id, rows: rows.map(toRow) };
+    return {
+      courseTitle: course.title,
+      courseId: course.id,
+      rows: course.collaborations.map(toRow),
+    };
   } catch {
     return { courseTitle: "", courseId: "", rows: [] };
   }

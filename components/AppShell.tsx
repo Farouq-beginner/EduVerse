@@ -9,7 +9,7 @@ import { BrandMark } from "./BrandMark";
 import { RouteProgress } from "./RouteProgress";
 import { SessionGuard } from "./SessionGuard";
 import { getBrandSettings, getTheme, saveTheme } from "@/lib/storage";
-import { getSessionProfile } from "@/lib/actions/dashboards";
+import { invalidateSessionProfile, loadSessionProfile } from "@/lib/session-client";
 import { logoutUser } from "@/lib/actions/auth";
 
 const teacherLinks = [
@@ -40,7 +40,7 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
   // Profil taken dari database — nama di sidebar harus milik akun yang login.
   useEffect(() => {
     let active = true;
-    getSessionProfile()
+    loadSessionProfile()
       .then((profile) => {
         if (active && profile) setAccount({ fullName: profile.fullName, role: profile.role });
       })
@@ -54,6 +54,7 @@ export function AppShell({ children, role = "teacher" }: { children: React.React
   }, []);
 
   async function handleLogout() {
+    invalidateSessionProfile();
     await logoutUser();
     router.push("/auth");
     router.refresh();

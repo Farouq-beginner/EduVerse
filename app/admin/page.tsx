@@ -1,13 +1,11 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Activity,
   ArrowLeft,
   BookOpen,
-  LogOut,
   Palette,
   Save,
   Settings2,
@@ -15,22 +13,19 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { MetricCard, StatusPill } from "@/components/DashboardBits";
 import { Toast } from "@/components/Toast";
 import { getBrandSettings, saveBrandSettings, type BrandSettings } from "@/lib/storage";
 import {
   getAdminStats,
   getTeacherAccounts,
-  getSessionProfile,
   setTeacherActive,
   type TeacherAccountRow,
 } from "@/lib/actions/dashboards";
-import { logoutUser } from "@/lib/actions/auth";
+import { loadSessionProfile } from "@/lib/session-client";
 import { AccountManager } from "./AccountManager";
 
 export default function AdminPage() {
-  const router = useRouter();
   const [brand, setBrand] = useState<BrandSettings>({ appName: "EduVerse", accent: "#7C5CFC" });
   const [toast, setToast] = useState("");
   const [adminName, setAdminName] = useState("Admin EduVerse");
@@ -48,17 +43,11 @@ export default function AdminPage() {
 
   useEffect(() => {
     let active = true;
-    getSessionProfile().then((p) => {
+    loadSessionProfile().then((p) => {
       if (active && p?.fullName) setAdminName(p.fullName);
     });
     return () => { active = false; };
   }, []);
-
-  async function handleLogout() {
-    await logoutUser();
-    router.push("/auth");
-    router.refresh();
-  }
 
   useEffect(() => {
     let active = true;
@@ -102,10 +91,8 @@ export default function AdminPage() {
     setToast("Branding demo diperbarui di browser ini.");
   }
 
-  const adminInitials = adminName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
-
   return (
-    <AppShell role="admin">
+    <div className="admin-page">
       <div className="page-topbar">
         <div>
           <div className="eyebrow">PLATFORM CONTROL ROOM</div>
@@ -113,21 +100,12 @@ export default function AdminPage() {
           <p>Pantau kesehatan ruang belajar dan jaga sistem tetap terasa ramah.</p>
         </div>
         <div className="page-topbar__actions">
+          <span className="admin-session">
+            <ShieldCheck size={15} /> {adminName}
+          </span>
           <Link href="/" className="button button--ghost button--small">
             <ArrowLeft size={15} /> Lihat landing
           </Link>
-          <div className="user-pill">
-            <span className="user-pill__avatar" style={{ background: "var(--violet)" }}>
-              {adminInitials}
-            </span>
-            <div>
-              <strong>{adminName}</strong>
-              <small>Platform owner</small>
-            </div>
-          </div>
-          <button className="button button--ghost button--small" onClick={handleLogout}>
-            <LogOut size={15} /> Keluar
-          </button>
         </div>
       </div>
 
@@ -281,6 +259,6 @@ export default function AdminPage() {
       </div>
 
       {toast && <Toast message={toast} onClose={() => setToast("")} />}
-    </AppShell>
+    </div>
   );
 }

@@ -846,15 +846,13 @@ export default function CourseBuilderPage() {
                         {isEditing && (
                           <BlockEditor
                             block={item}
-                            lockCandidates={modules
-                              .flatMap((candidateModule) =>
-                                candidateModule.lessons.map((lesson) => ({
-                                  id: lesson.id,
-                                  title: lesson.title,
-                                  moduleTitle: candidateModule.title,
-                                }))
-                              )
-                              .filter((candidate) => candidate.id !== item.id)}
+                            lockCandidates={module.lessons
+                              .filter((lesson) => lesson.id !== item.id)
+                              .map((lesson) => ({
+                                id: lesson.id,
+                                title: lesson.title,
+                                moduleTitle: module.title,
+                              }))}
                             uploading={uploadingBlockId === item.id}
                             onPatch={(patch) => patchBlock(item.id, patch)}
                             onMaterial={(patch) => patchMaterial(item.id, patch)}
@@ -1107,6 +1105,12 @@ function BlockEditor({
   const material = block.material ?? {};
   const worksheet: WorksheetConfig = { ...blankWorksheet, ...(material.worksheet ?? {}) };
   const lock = material.lock ?? { enabled: false, requires: [] };
+  const lockMeetingTitle = lockCandidates[0]?.moduleTitle ?? "pertemuan ini";
+  // Prasyarat lama dari pertemuan lain tetap dihormati, tetapi tidak lagi
+  // ditawarkan di pemilih karena kunci sekarang per pertemuan.
+  const outsideRequires = lock.requires.filter(
+    (id) => !lockCandidates.some((candidate) => candidate.id === id)
+  );
 
   return (
     <div className="activity-lesson-card" style={{ marginTop: 10, padding: 16, background: "var(--surface-2)", borderRadius: 14 }}>
@@ -1253,29 +1257,55 @@ function BlockEditor({
           </div>
         </div>
         {lock.enabled && (
-          <div className="field field--full">
-            <label>Materi yang harus selesai dulu</label>
-            <div className="lock-candidates">
-              {lockCandidates.map((candidate) => (
-                <label className="lock-candidate" key={candidate.id}>
-                  <input
-                    type="checkbox"
-                    checked={lock.requires.includes(candidate.id)}
-                    onChange={(event) => {
-                      const requires = event.target.checked
-                        ? [...lock.requires, candidate.id]
-                        : lock.requires.filter((id) => id !== candidate.id);
-                      onMaterial({ lock: { enabled: true, requires } });
-                    }}
-                  />
-                  <span>
-                    {candidate.title}
-                    <small>{candidate.moduleTitle}</small>
-                  </span>
-                </label>
-              ))}
-              {lockCandidates.length === 0 && <small className="field-helper">Belum ada materi lain di pembelajaran ini.</small>}
+          <div className="field field--full lock-picker">
+            <div className="lock-picker__head">
+              <div>
+                <label>Materi yang harus selesai dulu</label>
+                <small className="field-helper">
+                  Pilihan dibatasi ke materi di pertemuan ini: {lockMeetingTitle}.
+                </small>
+              </div>
+              <span className={`lock-picker__count ${lock.requires.length ? "is-on" : ""}`}>
+                {lock.requires.length} dipilih
+              </span>
             </div>
+
+            {lockCandidates.length === 0 ? (
+              <p className="lock-picker__empty">
+                Belum ada materi lain di pertemuan ini. Tambah materi dulu agar kunci bisa dipakai.
+              </p>
+            ) : (
+              <div className="lock-candidates">
+                {lockCandidates.map((candidate) => {
+                  const checked = lock.requires.includes(candidate.id);
+                  return (
+                    <label className={`lock-candidate ${checked ? "is-checked" : ""}`} key={candidate.id}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          const requires = event.target.checked
+                            ? [...lock.requires, candidate.id]
+                            : lock.requires.filter((id) => id !== candidate.id);
+                          onMaterial({ lock: { enabled: true, requires } });
+                        }}
+                      />
+                      <span>
+                        <strong>{candidate.title}</strong>
+                        <small>{candidate.moduleTitle}</small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {outsideRequires.length > 0 && (
+              <p className="lock-picker__note">
+                {outsideRequires.length} prasyarat dari pertemuan lain masih berlaku untuk materi ini.
+              </p>
+            )}
+
             <small className="field-helper">
               {lock.requires.length === 0
                 ? "Pilih minimal satu materi agar kunci berfungsi."

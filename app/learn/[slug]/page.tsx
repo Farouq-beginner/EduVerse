@@ -37,12 +37,13 @@ import {
   saveProgress,
   type ParticipantIdentity,
 } from "@/lib/storage";
-import { getCourseStructure, getMyCourseProgress, getSessionProfile, type DbCourse } from "@/lib/actions/dashboards";
+import { getCourseStructure, getMyCourseProgress, type DbCourse } from "@/lib/actions/dashboards";
 import { joinCourseByToken, validateJoinToken } from "@/lib/actions/enrollment";
 import { markBlockComplete, syncBlockCompletions } from "@/lib/actions/progress";
 import { isBlockLocked, toModule } from "@/lib/course";
 import { getCourseRevisionBySlug } from "@/lib/actions/sync";
 import { loadWithCache, sharedPing } from "@/lib/client-cache";
+import { loadSessionProfile } from "@/lib/session-client";
 
 export default function StudentLearningPage() {
   const params = useParams<{ slug: string }>();
@@ -76,13 +77,17 @@ export default function StudentLearningPage() {
     let active = true;
     (async () => {
       try {
-        // Ping revisi dulu: bila data belum berubah, struktur dari cache dipakai
-        // tanpa query pengambilan data penuh.
-        const structure = await loadWithCache(
-          `structure:${courseSlug}`,
-          () => getCourseStructure(courseSlug),
-          () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
-        );
+        // Tiga permintaan dijalankan bersamaan: struktur, profil, dan progres.
+        // Sebelumnya berurutan sehingga halaman menunggu tiga kali round-trip.
+        const [structure, profile, mine] = await Promise.all([
+          loadWithCache(
+            `structure:${courseSlug}`,
+            () => getCourseStructure(courseSlug),
+            () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
+          ),
+          loadSessionProfile(),
+          getMyCourseProgress(courseSlug),
+        ]);
         if (!active) return;
         if (!structure) {
           setNotFound(true);
@@ -90,10 +95,6 @@ export default function StudentLearningPage() {
         }
         setDbCourse(structure);
         setModules(structure.modules.map(toModule));
-
-        const profile = await getSessionProfile();
-        const mine = await getMyCourseProgress(courseSlug);
-        if (!active) return;
 
         if (profile && profile.role === "STUDENT") {
           setAccount({

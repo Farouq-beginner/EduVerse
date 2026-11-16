@@ -33,7 +33,8 @@ import {
   saveCompleted,
   saveProgress,
 } from "@/lib/storage";
-import { getCourseStructure, getMyCourseProgress, getQuizForBlock, getSessionProfile, type DbCourse } from "@/lib/actions/dashboards";
+import { getCourseStructure, getMyCourseProgress, getQuizForBlock, type DbCourse } from "@/lib/actions/dashboards";
+import { loadSessionProfile } from "@/lib/session-client";
 import { markBlockComplete, submitQuizAttempt, syncBlockCompletions } from "@/lib/actions/progress";
 import { isBlockLocked, toModule } from "@/lib/course";
 import { getCourseRevisionBySlug } from "@/lib/actions/sync";
@@ -74,15 +75,16 @@ export default function ModulePage() {
     let active = true;
     (async () => {
       try {
-        const [structure, profile] = await Promise.all([
+        // Struktur, profil, dan progres diminta bersamaan (satu round-trip).
+        const [structure, profile, mine] = await Promise.all([
           loadWithCache(
             `structure:${courseSlug}`,
             () => getCourseStructure(courseSlug),
             () => sharedPing(`rev:course:${courseSlug}`, () => getCourseRevisionBySlug(courseSlug))
           ),
-          getSessionProfile(),
+          loadSessionProfile(),
+          getMyCourseProgress(courseSlug),
         ]);
-        const mine = await getMyCourseProgress(courseSlug);
         if (!active) return;
 
         if (structure) {

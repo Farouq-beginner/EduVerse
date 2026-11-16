@@ -891,10 +891,13 @@ export async function getMyCourseProgress(
   slug: string
 ): Promise<{ courseId: string; enrolled: boolean; completedBlockIds: string[] } | null> {
   try {
-    const me = await getSessionProfile();
+    // Sesi dan course tidak saling bergantung: ambil bersamaan agar satu
+    // round-trip lebih cepat.
+    const [me, course] = await Promise.all([
+      getSessionProfile(),
+      prisma.course.findUnique({ where: { slug }, select: { id: true } }),
+    ]);
     if (!me || me.role !== "STUDENT") return null;
-
-    const course = await prisma.course.findUnique({ where: { slug }, select: { id: true } });
     if (!course) return null;
 
     const [enrollment, progress] = await Promise.all([
